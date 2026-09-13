@@ -80,10 +80,7 @@ async fn ask(
     State(app): State<Arc<App>>,
     Json(req): Json<AskRequest>,
 ) -> Result<Json<AskResponse>, (StatusCode, Json<ErrorBody>)> {
-    let pack_name = app
-        .home
-        .read_pack()
-        .unwrap_or_else(|_| "hearthside".into());
+    let pack_name = app.home.read_pack().unwrap_or_else(|_| "hearthside".into());
     let charter = Charter::builtin(&pack_name).map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
