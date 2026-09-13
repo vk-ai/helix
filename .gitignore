@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+.idea/
+.vscode/
+.DS_Store
+*.swp
+.env
+.env.*
+!/.env.example
+/Helix/
