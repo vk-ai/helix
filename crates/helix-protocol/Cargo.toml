@@ -1,0 +1,10 @@
+[package]
+name = "helix-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared types for the Helix daemon and CLI"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

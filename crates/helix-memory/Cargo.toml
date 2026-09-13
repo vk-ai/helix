@@ -1,0 +1,11 @@
+[package]
+name = "helix-memory"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Helix home directory and file-based memory"
+
+[dependencies]
+dirs.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
