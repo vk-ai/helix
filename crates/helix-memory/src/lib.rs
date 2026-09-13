@@ -20,7 +20,9 @@ pub struct HelixHome {
 impl HelixHome {
     pub fn resolve() -> Result<Self, MemoryError> {
         if let Ok(p) = std::env::var("HELIX_HOME") {
-            return Ok(Self { root: PathBuf::from(p) });
+            return Ok(Self {
+                root: PathBuf::from(p),
+            });
         }
         let home = dirs::home_dir().ok_or(MemoryError::NoHome)?;
         Ok(Self {
@@ -87,9 +89,8 @@ impl HelixHome {
     }
 
     pub fn read_pack(&self) -> Result<String, MemoryError> {
-        let text = fs::read_to_string(self.charter_path()).unwrap_or_else(|_| {
-            "pack = \"hearthside\"\n".into()
-        });
+        let text = fs::read_to_string(self.charter_path())
+            .unwrap_or_else(|_| "pack = \"hearthside\"\n".into());
         for line in text.lines() {
             let line = line.trim();
             if let Some(rest) = line.strip_prefix("pack") {
@@ -103,6 +104,7 @@ impl HelixHome {
         Ok("hearthside".into())
     }
 
+    /// Keyword retrieval stub. Later this uses local embeddings.
     pub fn retrieve_context(&self, query: &str) -> Result<String, MemoryError> {
         let mut hits = Vec::new();
         collect_hits(&self.root.join("memory"), query, &mut hits)?;
@@ -117,7 +119,10 @@ impl HelixHome {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let mut f = fs::OpenOptions::new().create(true).append(true).open(path)?;
+        let mut f = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?;
         writeln!(f, "{line}")?;
         Ok(())
     }
@@ -145,10 +150,19 @@ fn visit(dir: &Path, tokens: &[&str], out: &mut Vec<String>) -> io::Result<()> {
         {
             let text = fs::read_to_string(&path).unwrap_or_default();
             let lower = text.to_lowercase();
-            let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
-            let hit = tokens.is_empty() || tokens.iter().any(|t| lower.contains(t) || name.contains(t));
+            let name = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            let hit =
+                tokens.is_empty() || tokens.iter().any(|t| lower.contains(t) || name.contains(t));
             if hit && path.file_name().and_then(|s| s.to_str()) != Some("README.md") {
-                out.push(format!("{}:\n{}", path.display(), text.chars().take(800).collect::<String>()));
+                out.push(format!(
+                    "{}:\n{}",
+                    path.display(),
+                    text.chars().take(800).collect::<String>()
+                ));
             }
         }
         if out.len() >= 6 {

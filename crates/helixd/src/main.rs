@@ -25,9 +25,8 @@ struct App {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let home = HelixHome::resolve()?;
-    let pack = std::env::var("HELIX_PACK").unwrap_or_else(|_| {
-        home.read_pack().unwrap_or_else(|_| "hearthside".into())
-    });
+    let pack = std::env::var("HELIX_PACK")
+        .unwrap_or_else(|_| home.read_pack().unwrap_or_else(|_| "hearthside".into()));
     home.init(&pack)?;
 
     let bind = std::env::var("HELIX_BIND").unwrap_or_else(|_| DEFAULT_BIND.into());
@@ -81,11 +80,16 @@ async fn ask(
     State(app): State<Arc<App>>,
     Json(req): Json<AskRequest>,
 ) -> Result<Json<AskResponse>, (StatusCode, Json<ErrorBody>)> {
-    let pack_name = app.home.read_pack().unwrap_or_else(|_| "hearthside".into());
+    let pack_name = app
+        .home
+        .read_pack()
+        .unwrap_or_else(|_| "hearthside".into());
     let charter = Charter::builtin(&pack_name).map_err(|e| {
         (
             StatusCode::BAD_REQUEST,
-            Json(ErrorBody { error: e.to_string() }),
+            Json(ErrorBody {
+                error: e.to_string(),
+            }),
         )
     })?;
     let memory = app
@@ -166,5 +170,7 @@ async fn loom_complete(
         .await?
         .error_for_status()?;
     let parsed: OllamaResponse = res.json().await?;
-    Ok(parsed.response.unwrap_or_else(|| "(empty model response)".into()))
+    Ok(parsed
+        .response
+        .unwrap_or_else(|| "(empty model response)".into()))
 }
