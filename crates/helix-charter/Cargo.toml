@@ -6,7 +6,6 @@ license.workspace = true
 description = "Charter pack loading for Helix"
 
 [dependencies]
-helix-protocol.workspace = true
 serde.workspace = true
 toml.workspace = true
 thiserror.workspace = true

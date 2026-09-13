@@ -4,6 +4,13 @@ All notable changes to Helix are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Helix versions follow [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- CI `cargo fmt --check` on the initial four pushes
+- Unused `helix-protocol` dependency on `helix-charter`
+
 ## [0.1.0] - 2026-09-13
 
 ### Added
