@@ -25,9 +25,7 @@ enum Commands {
         action: CharterCmd,
     },
     /// Send a message through the local daemon
-    Ask {
-        text: String,
-    },
+    Ask { text: String },
 }
 
 #[derive(Subcommand)]
@@ -57,7 +55,10 @@ async fn main() -> anyhow::Result<()> {
                     println!("bind     {}", status.bind);
                     println!("pack     {}", status.pack);
                     println!("model    {}", status.model);
-                    println!("ollama   {} reachable={}", status.ollama, status.ollama_reachable);
+                    println!(
+                        "ollama   {} reachable={}",
+                        status.ollama, status.ollama_reachable
+                    );
                     println!("version  {}", status.version);
                 }
                 Err(err) => {
