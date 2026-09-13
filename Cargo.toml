@@ -15,7 +15,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/vk-ai/helix"
 homepage = "https://github.com/vk-ai/helix"
 authors = ["Helix contributors"]
-rust-version = "1.75"
+rust-version = "1.85"
 
 [workspace.dependencies]
 helix-protocol = { path = "crates/helix-protocol" }
