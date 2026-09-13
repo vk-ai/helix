@@ -5,9 +5,8 @@ use thiserror::Error;
 pub enum CharterError {
     #[error("unknown charter pack: {0}")]
     UnknownPack(String),
-    #[error("invalid charter: {0}")]
-    Invalid(String),
     #[error(transparent)]
+    #[allow(dead_code)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Toml(#[from] toml::de::Error),
