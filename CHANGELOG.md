@@ -10,6 +10,7 @@ Helix versions follow [SemVer](https://semver.org/).
 
 - CI `cargo fmt --check` on the initial four pushes
 - Unused `helix-protocol` dependency on `helix-charter`
+- Replace abbreviated LICENSE-APACHE with the full Apache License 2.0 text
 
 ## [0.1.0] - 2026-09-13
 
