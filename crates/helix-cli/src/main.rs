@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use helix_charter::Charter;
-use helix_memory::HelixHome;
+use helix_memory::{new_episode, HelixHome, Verdict};
 use helix_protocol::{AskRequest, AskResponse, Status, DEFAULT_BIND, DEFAULT_PACK};
 
 #[derive(Parser)]
@@ -25,7 +25,18 @@ enum Commands {
         action: CharterCmd,
     },
     /// Send a message through the local daemon
-    Ask { text: String },
+    Ask {
+        text: String,
+        /// Accept the reply and write an episode under memory/episodes/
+        #[arg(long, group = "verdict")]
+        accept: bool,
+        /// Reject the reply (still records an episode with verdict=reject)
+        #[arg(long, group = "verdict")]
+        reject: bool,
+        /// Accept an edited reply; value is the corrected text stored as the episode outcome
+        #[arg(long, group = "verdict", value_name = "TEXT")]
+        edit: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -86,12 +97,19 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        Commands::Ask { text } => {
+        Commands::Ask {
+            text,
+            accept,
+            reject,
+            edit,
+        } => {
             let url = daemon_url();
             let client = reqwest::Client::new();
             let res = client
                 .post(format!("{url}/v1/ask"))
-                .json(&AskRequest { text })
+                .json(&AskRequest {
+                    text: text.clone(),
+                })
                 .send()
                 .await
                 .map_err(|e| anyhow::anyhow!("daemon not reachable at {url} ({e})"))?;
@@ -105,6 +123,38 @@ async fn main() -> anyhow::Result<()> {
             print!("{}", body.memory_context);
             println!("--- reply ---");
             println!("{}", body.reply);
+
+            let verdict = if accept {
+                Some(Verdict::Accept)
+            } else if reject {
+                Some(Verdict::Reject)
+            } else if edit.is_some() {
+                Some(Verdict::Edit)
+            } else {
+                None
+            };
+
+            if let Some(verdict) = verdict {
+                let home = HelixHome::resolve()?;
+                home.init(&body.pack)?;
+                let episode = new_episode(
+                    &text,
+                    &body.reply,
+                    edit.clone(),
+                    verdict,
+                    &body.pack,
+                    body.model_used,
+                );
+                let path = home.write_episode(&episode)?;
+                println!("--- episode ---");
+                println!("verdict  {:?}", verdict);
+                println!("wrote    {}", path.display());
+                if matches!(verdict, Verdict::Accept | Verdict::Edit) {
+                    println!(
+                        "(playbook may appear under memory/playbooks/ after two similar successes)"
+                    );
+                }
+            }
         }
     }
     Ok(())
