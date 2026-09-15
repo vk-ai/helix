@@ -6,6 +6,11 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Memory write path: after `helix ask`, CLI flags `--accept` / `--reject` / `--edit TEXT` (or interactive prompt on TTY) write episode JSON under `~/Helix/memory/episodes`
+- Optional playbook promotion after two similar accepted successes (keyword overlap)
+
 ### Fixed
 
 - CI `cargo fmt --check` on the initial four pushes
