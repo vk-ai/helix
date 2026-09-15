@@ -8,8 +8,10 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
-- Memory write path: after `helix ask`, CLI flags `--accept` / `--reject` / `--edit TEXT` (or interactive prompt on TTY) write episode JSON under `~/Helix/memory/episodes`
-- Optional playbook promotion after two similar accepted successes (keyword overlap)
+- Memory write path: `helix ask --accept`, `--reject`, and `--edit TEXT` write
+  episode JSON under `~/Helix/memory/episodes/`
+- Optional playbook promotion after two similar accepted/edited successes
+  (`memory/playbooks/`)
 
 ### Fixed
 
