@@ -6,6 +6,9 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Soft cap on preference text injected into an ask prompt (chars, approx tokens).
+pub const PREFS_CONTEXT_CHAR_CAP: usize = 1500;
+
 #[derive(Debug, Error)]
 pub enum MemoryError {
     #[error(transparent)]
@@ -14,6 +17,10 @@ pub enum MemoryError {
     Json(#[from] serde_json::Error),
     #[error("home directory not found")]
     NoHome,
+    #[error("invalid preference name: {0}")]
+    InvalidPrefName(String),
+    #[error("preference not found: {0}")]
+    PrefNotFound(String),
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +50,13 @@ pub struct Episode {
     pub verdict: Verdict,
     pub pack: String,
     pub model_used: bool,
+}
+
+/// One preference: short rule stored as memory/prefs/<name>.md
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pref {
+    pub name: String,
+    pub text: String,
 }
 
 impl HelixHome {
@@ -99,7 +113,8 @@ impl HelixHome {
         if !prefs.exists() {
             fs::write(
                 prefs,
-                "# Preferences\n\nOne short rule per file. Delete a file to forget it.\n",
+                "# Preferences\n\nOne short rule per file. Delete a file to forget it.\n\
+Use `helix pref add NAME \"text\"` to add one.\n",
             )?;
         }
 
@@ -132,12 +147,105 @@ impl HelixHome {
         Ok("hearthside".into())
     }
 
+    pub fn prefs_dir(&self) -> PathBuf {
+        self.root.join("memory/prefs")
+    }
+
+    /// Validate preference name: lowercase alphanumeric + hyphen, 1–64 chars.
+    pub fn validate_pref_name(name: &str) -> Result<(), MemoryError> {
+        if name.is_empty() || name.len() > 64 {
+            return Err(MemoryError::InvalidPrefName(name.into()));
+        }
+        if !name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        {
+            return Err(MemoryError::InvalidPrefName(name.into()));
+        }
+        if name.starts_with('-') || name.ends_with('-') {
+            return Err(MemoryError::InvalidPrefName(name.into()));
+        }
+        Ok(())
+    }
+
+    pub fn list_prefs(&self) -> Result<Vec<Pref>, MemoryError> {
+        let dir = self.prefs_dir();
+        if !dir.exists() {
+            return Ok(Vec::new());
+        }
+        let mut out = Vec::new();
+        for entry in fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("md") {
+                continue;
+            }
+            let name = match path.file_stem().and_then(|s| s.to_str()) {
+                Some(n) if n != "README" => n.to_string(),
+                _ => continue,
+            };
+            let text = fs::read_to_string(&path).unwrap_or_default();
+            out.push(Pref { name, text });
+        }
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(out)
+    }
+
+    pub fn add_pref(&self, name: &str, text: &str) -> Result<PathBuf, MemoryError> {
+        Self::validate_pref_name(name)?;
+        let dir = self.prefs_dir();
+        fs::create_dir_all(&dir)?;
+        let path = dir.join(format!("{name}.md"));
+        let body = text.trim();
+        let body = if body.is_empty() {
+            format!("# {name}\n")
+        } else {
+            format!("{body}\n")
+        };
+        fs::write(&path, body)?;
+        Ok(path)
+    }
+
+    pub fn delete_pref(&self, name: &str) -> Result<(), MemoryError> {
+        Self::validate_pref_name(name)?;
+        let path = self.prefs_dir().join(format!("{name}.md"));
+        if !path.exists() {
+            return Err(MemoryError::PrefNotFound(name.into()));
+        }
+        fs::remove_file(path)?;
+        Ok(())
+    }
+
+    /// Format preferences for the ask prompt, truncated to `max_chars`.
+    pub fn prefs_context(&self, max_chars: usize) -> Result<String, MemoryError> {
+        let prefs = self.list_prefs()?;
+        if prefs.is_empty() {
+            return Ok(String::new());
+        }
+        let mut out = String::from("Preferences (user rules):\n");
+        let mut used = out.len();
+        for p in prefs {
+            let line = format!("- {}: {}\n", p.name, p.text.trim().replace('\n', " "));
+            if used + line.len() > max_chars {
+                out.push_str("(further preferences truncated)\n");
+                break;
+            }
+            out.push_str(&line);
+            used += line.len();
+        }
+        Ok(out)
+    }
+
     /// Keyword retrieval stub. Later this uses local embeddings.
+    /// Prefs are injected separately via prefs_context so they are not double-counted.
     pub fn retrieve_context(&self, query: &str) -> Result<String, MemoryError> {
         let mut hits = Vec::new();
-        collect_hits(&self.root.join("memory"), query, &mut hits)?;
+        // Skip memory/prefs — handled by prefs_context with a hard cap.
+        for sub in ["episodes", "playbooks", "tools"] {
+            collect_hits(&self.root.join("memory").join(sub), query, &mut hits)?;
+        }
         if hits.is_empty() {
-            return Ok("(no playbooks, tool notes, or preferences matched yet)\n".into());
+            return Ok("(no playbooks, tool notes, or episodes matched yet)\n".into());
         }
         Ok(hits.join("\n---\n"))
     }
@@ -398,5 +506,42 @@ mod tests {
             "expected a playbook after two similar accepts"
         );
         let _ = fs::remove_dir_all(&home.root);
+    }
+
+    #[test]
+    fn pref_add_list_delete() {
+        let home = temp_home();
+        home.init("hearthside").unwrap();
+        let path = home
+            .add_pref("tone", "Prefer concise bullet replies.")
+            .unwrap();
+        assert!(path.exists());
+        let list = home.list_prefs().unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "tone");
+        assert!(list[0].text.contains("concise"));
+        home.delete_pref("tone").unwrap();
+        assert!(home.list_prefs().unwrap().is_empty());
+        let _ = fs::remove_dir_all(&home.root);
+    }
+
+    #[test]
+    fn pref_context_capped() {
+        let home = temp_home();
+        home.init("hearthside").unwrap();
+        home.add_pref("a", "short rule one").unwrap();
+        home.add_pref("b", "short rule two").unwrap();
+        let ctx = home.prefs_context(80).unwrap();
+        assert!(ctx.contains("Preferences"));
+        // With a tiny cap, second pref may be truncated
+        assert!(ctx.len() <= 120);
+        let _ = fs::remove_dir_all(&home.root);
+    }
+
+    #[test]
+    fn invalid_pref_name() {
+        assert!(HelixHome::validate_pref_name("Bad Name").is_err());
+        assert!(HelixHome::validate_pref_name("").is_err());
+        assert!(HelixHome::validate_pref_name("ok-name-1").is_ok());
     }
 }

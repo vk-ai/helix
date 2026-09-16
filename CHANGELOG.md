@@ -8,6 +8,10 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Preference files: `helix pref add|list|delete`; rules live under
+  `~/Helix/memory/prefs/<name>.md`
+- Prefs are injected into the ask prompt with a 1500-character soft cap
+  (`PREFS_CONTEXT_CHAR_CAP`); keyword retrieval no longer double-counts prefs
 - Memory write path: `helix ask --accept`, `--reject`, and `--edit TEXT` write
   episode JSON under `~/Helix/memory/episodes/`
 - Optional playbook promotion after two similar accepted/edited successes

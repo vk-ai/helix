@@ -6,9 +6,9 @@ Helix runs on your machine. A frozen language model plans; tools run only with
 capabilities you issued; secrets stay in the OS keychain; memory is files you
 can open, edit, and delete. The model never sees API keys or passwords.
 
-> Status: **early slice**. Daemon, CLI, charter packs, Ollama ask path, and
-> episode write (`--accept` / `--edit` / `--reject`) work today. Preferences,
-> Reliquary, Wasm tools, and connectors are next.
+> Status: **early slice**. Daemon, CLI, charter packs, Ollama ask path, episode
+> write (`--accept` / `--edit` / `--reject`), and preferences (`helix pref`)
+> work today. Reliquary, Wasm tools, and connectors are next.
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
 [Install](#install) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
@@ -137,6 +137,21 @@ Accepted and edited replies write episode JSON under `~/Helix/memory/episodes/`.
 After two similar successes, a short playbook may appear under
 `memory/playbooks/`.
 
+### 6. Preferences
+
+Short standing rules live as one file each under `~/Helix/memory/prefs/`:
+
+```bash
+helix pref add tone "Prefer concise bullet replies."
+helix pref add format "Use ISO dates."
+helix pref list
+helix pref delete format
+```
+
+On every `helix ask`, preferences are injected into the model context first
+(soft-capped at 1500 characters) so the model can follow your rules without
+fine-tuning.
+
 ---
 
 ## Platform notes
@@ -199,12 +214,12 @@ helix charter show
 - `helix ask` against Ollama
 - Episode write path: `helix ask "…" --accept` / `--reject` / `--edit "…"`
 - Optional playbook promotion after two similar successes
+- Preference CLI: `helix pref add|list|delete` and capped injection into ask
 - Memory directories for episodes / playbooks / notes / prefs
 - Chronicle log file created
 
 **Not in this slice** (designed, not shipped)
 
-- Preference CLI (`helix pref`) and context injection
 - Reliquary UI and OS-keychain unwrap
 - Wasm Hands / Wasmtime tools
 - Biscuit capability tokens

@@ -8,7 +8,7 @@ use axum::{
     Json, Router,
 };
 use helix_charter::Charter;
-use helix_memory::HelixHome;
+use helix_memory::{HelixHome, PREFS_CONTEXT_CHAR_CAP};
 use helix_protocol::{
     AskRequest, AskResponse, ErrorBody, Status, DEFAULT_BIND, DEFAULT_MODEL, DEFAULT_OLLAMA,
 };
@@ -89,10 +89,22 @@ async fn ask(
             }),
         )
     })?;
-    let memory = app
+
+    let prefs = app
+        .home
+        .prefs_context(PREFS_CONTEXT_CHAR_CAP)
+        .unwrap_or_default();
+    let retrieved = app
         .home
         .retrieve_context(&req.text)
         .unwrap_or_else(|_| "(memory unavailable)\n".into());
+
+    // Prefs first (capped), then keyword hits from episodes/playbooks/tools.
+    let memory = if prefs.is_empty() {
+        retrieved
+    } else {
+        format!("{prefs}\n{retrieved}")
+    };
 
     let (reply, model_used) = match loom_complete(&app, &charter, &memory, &req.text).await {
         Ok(text) => (text, true),

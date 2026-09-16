@@ -24,6 +24,11 @@ enum Commands {
         #[command(subcommand)]
         action: CharterCmd,
     },
+    /// Manage short preference rules (memory/prefs/)
+    Pref {
+        #[command(subcommand)]
+        action: PrefCmd,
+    },
     /// Send a message through the local daemon
     Ask {
         text: String,
@@ -43,6 +48,20 @@ enum Commands {
 enum CharterCmd {
     Show,
     Set { pack: String },
+}
+
+#[derive(Subcommand)]
+enum PrefCmd {
+    /// List preference names and text
+    List,
+    /// Add or overwrite a preference (name: lowercase, digits, hyphens)
+    Add {
+        name: String,
+        /// Preference text (short rule)
+        text: String,
+    },
+    /// Delete a preference by name
+    Delete { name: String },
 }
 
 #[tokio::main]
@@ -94,6 +113,30 @@ async fn main() -> anyhow::Result<()> {
                     home.init(&pack)?;
                     home.write_pack(&pack)?;
                     println!("pack set to {pack}");
+                }
+            }
+        }
+        Commands::Pref { action } => {
+            let home = HelixHome::resolve()?;
+            home.init(&home.read_pack().unwrap_or_else(|_| DEFAULT_PACK.into()))?;
+            match action {
+                PrefCmd::List => {
+                    let prefs = home.list_prefs()?;
+                    if prefs.is_empty() {
+                        println!("(no preferences yet)");
+                    } else {
+                        for p in prefs {
+                            println!("{}:\n  {}\n", p.name, p.text.trim());
+                        }
+                    }
+                }
+                PrefCmd::Add { name, text } => {
+                    let path = home.add_pref(&name, &text)?;
+                    println!("wrote {}", path.display());
+                }
+                PrefCmd::Delete { name } => {
+                    home.delete_pref(&name)?;
+                    println!("deleted {name}");
                 }
             }
         }
