@@ -8,6 +8,12 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Reliquary catalog (`helix-reliquary` crate): named secret references under
+  `~/Helix/reliquary/` with local sealed store (`catalog.json` + `sealed.json`)
+- OS keychain backend stub (macOS Keychain / DPAPI / libsecret) — unwrap is
+  no-op; local sealed copy kept for this slice
+- CLI: `helix secrets list|add|revoke` (list never prints values; add accepts
+  `--value` or stdin)
 - Preference files: `helix pref add|list|delete`; rules live under
   `~/Helix/memory/prefs/<name>.md`
 - Prefs are injected into the ask prompt with a 1500-character soft cap
