@@ -80,6 +80,7 @@ impl HelixHome {
             "memory/playbooks",
             "memory/tools",
             "memory/prefs",
+            "reliquary",
             "atlas",
             "chronicle",
         ] {

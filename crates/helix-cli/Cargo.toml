@@ -14,6 +14,7 @@ path = "src/main.rs"
 helix-protocol.workspace = true
 helix-charter.workspace = true
 helix-memory.workspace = true
+helix-reliquary.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 reqwest.workspace = true
