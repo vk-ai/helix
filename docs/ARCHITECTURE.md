@@ -18,11 +18,13 @@ model is frozen. Authority is issued, never assumed.
   config/charter.toml
   plots/<id>/
   memory/{episodes,playbooks,tools,prefs}/
+  reliquary/          # catalog.json + sealed.json (values never in prompts)
   atlas/pins.json
   chronicle/log.jsonl
 ```
 
-Vault material belongs in the OS keychain, not in this tree.
+Secret values live in Reliquary (local sealed store today; OS keychain later).
+They are references in catalog until unwrap at an adapter/Switch boundary.
 
 ## Learning
 
@@ -32,8 +34,9 @@ propose/execute/select) is optional and not on the default path.
 
 ## Slices
 
-1. Home + daemon + CLI + Ollama + memory dirs (this repository)
-2. Reliquary + Ask UI
-3. Wasm Hands + Switch
-4. First adapter
-5. Browser pane with human take-over
+1. Home + daemon + CLI + Ollama + memory dirs (shipped)
+2. Reliquary catalog + secrets CLI (shipped; keychain unwrap still stub)
+3. Ask protocol + Biscuit tokens
+4. Wasm Hands + Switch
+5. First adapter
+6. Browser pane with human take-over
