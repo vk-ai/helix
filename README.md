@@ -7,8 +7,9 @@ capabilities you issued; secrets stay in the OS keychain; memory is files you
 can open, edit, and delete. The model never sees API keys or passwords.
 
 > Status: **early slice**. Daemon, CLI, charter packs, Ollama ask path, episode
-> write (`--accept` / `--edit` / `--reject`), and preferences (`helix pref`)
-> work today. Reliquary, Wasm tools, and connectors are next.
+> write (`--accept` / `--edit` / `--reject`), preferences (`helix pref`), and
+> Reliquary catalog (`helix secrets`) work today. Wasm tools, Switch, and
+> connectors are next.
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
 [Install](#install) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
@@ -92,12 +93,13 @@ This creates:
     playbooks/
     tools/
     prefs/
+  reliquary/               # named secret references (catalog + sealed store)
   atlas/pins.json
   chronicle/log.jsonl
 ```
 
-Secrets are **not** written here. They belong in the OS keychain once Reliquary
-ships. Do not put API keys in `~/Helix`.
+Secret *values* belong in the sealed Reliquary store (or OS keychain when the
+real backend lands). The model never sees them. Do not paste API keys into chat.
 
 ### 4. Start the daemon
 
@@ -152,27 +154,45 @@ On every `helix ask`, preferences are injected into the model context first
 (soft-capped at 1500 characters) so the model can follow your rules without
 fine-tuning.
 
+### 7. Reliquary (secret references)
+
+Named secrets live under `~/Helix/reliquary/`. Values are sealed locally; the
+CLI never prints them. The OS keychain backend is a stub in this slice
+(unwrap is no-op; a local sealed copy is kept).
+
+```bash
+# Prefer stdin so the value stays out of shell history:
+echo -n 'sk-...' | helix secrets add openai-key
+# or:
+helix secrets add openai-key --value 'sk-...'
+helix secrets list
+helix secrets revoke openai-key
+```
+
+`list` shows only name, backend, ref id, and created time. Adapters will unwrap
+at a Switch boundary later; the model prompt never receives secret values.
+
 ---
 
 ## Platform notes
 
 ### macOS
 
-- Keychain access comes later with Reliquary. Grant Helix access when the OS
-  prompts; never paste keys into chat.
+- Reliquary keychain backend is a stub today; local sealed store is used.
+  Real Keychain access will prompt later — never paste keys into chat.
 - Seatbelt profiles for native adapters land with the Hands runtime.
 
 ### Linux
 
 - Build tools: `build-essential` (Debian/Ubuntu) or `gcc` + `make` (Fedora).
-- Reliquary will use libsecret. Install `libsecret-1-dev` when that slice ships.
+- Future Reliquary keychain backend will use libsecret (`libsecret-1-dev`).
 - Do not run `helixd` as root.
 
 ### Windows
 
 - Use Rustup + MSVC Build Tools.
 - The daemon binds IPv4 loopback. Keep Windows Firewall on; do not expose 7420.
-- Reliquary will use DPAPI + Windows Hello.
+- Future Reliquary keychain backend will use DPAPI + Windows Hello.
 
 ---
 
@@ -215,14 +235,17 @@ helix charter show
 - Episode write path: `helix ask "…" --accept` / `--reject` / `--edit "…"`
 - Optional playbook promotion after two similar successes
 - Preference CLI: `helix pref add|list|delete` and capped injection into ask
+- Reliquary catalog: `helix secrets list|add|revoke` (local sealed store +
+  keychain stub; values never printed or put in model context)
 - Memory directories for episodes / playbooks / notes / prefs
 - Chronicle log file created
 
 **Not in this slice** (designed, not shipped)
 
-- Reliquary UI and OS-keychain unwrap
+- Real OS-keychain unwrap (macOS / DPAPI / libsecret)
 - Wasm Hands / Wasmtime tools
 - Biscuit capability tokens
+- Switch egress proxy
 - Desktop app (Tauri)
 - Mail / calendar / browser adapters
 - Human take-over for CAPTCHA (browser pane)
@@ -256,6 +279,7 @@ helix/
     helix-protocol/   shared types
     helix-charter/    pack load + summary
     helix-memory/     home layout + retrieval stub
+    helix-reliquary/  named secret references + sealed store
   charter-packs/      hearthside, desk, workshop
   docs/               architecture and threat model
 ```
