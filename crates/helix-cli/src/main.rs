@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use helix_charter::Charter;
 use helix_memory::{new_episode, HelixHome, Verdict};
 use helix_protocol::{AskRequest, AskResponse, Status, DEFAULT_BIND, DEFAULT_PACK};
+use helix_reliquary::Reliquary;
 
 #[derive(Parser)]
 #[command(name = "helix", version, about = "Helix local personal agent")]
@@ -28,6 +29,11 @@ enum Commands {
     Pref {
         #[command(subcommand)]
         action: PrefCmd,
+    },
+    /// Manage Reliquary secret references (names only; values never printed)
+    Secrets {
+        #[command(subcommand)]
+        action: SecretsCmd,
     },
     /// Send a message through the local daemon
     Ask {
@@ -62,6 +68,25 @@ enum PrefCmd {
     },
     /// Delete a preference by name
     Delete { name: String },
+}
+
+#[derive(Subcommand)]
+enum SecretsCmd {
+    /// List secret names and metadata (never values)
+    List,
+    /// Add a named secret reference. Value is read from --value or stdin.
+    Add {
+        /// Name: lowercase, digits, hyphens
+        name: String,
+        /// Secret value (prefer stdin to avoid shell history)
+        #[arg(long)]
+        value: Option<String>,
+        /// Record backend as keychain-stub (still sealed locally in this slice)
+        #[arg(long)]
+        keychain: bool,
+    },
+    /// Revoke (delete) a named secret reference and its sealed material
+    Revoke { name: String },
 }
 
 #[tokio::main]
@@ -137,6 +162,66 @@ async fn main() -> anyhow::Result<()> {
                 PrefCmd::Delete { name } => {
                     home.delete_pref(&name)?;
                     println!("deleted {name}");
+                }
+            }
+        }
+        Commands::Secrets { action } => {
+            let home = HelixHome::resolve()?;
+            home.init(&home.read_pack().unwrap_or_else(|_| DEFAULT_PACK.into()))?;
+            let rel = Reliquary::open(home)?;
+            match action {
+                SecretsCmd::List => {
+                    let items = rel.list()?;
+                    if items.is_empty() {
+                        println!("(no secrets in Reliquary)");
+                    } else {
+                        for m in items {
+                            println!(
+                                "{}  backend={}  ref={}  created={}",
+                                m.name,
+                                match m.backend {
+                                    helix_reliquary::Backend::LocalSealed => "local-sealed",
+                                    helix_reliquary::Backend::KeychainStub => "keychain-stub",
+                                },
+                                m.ref_id,
+                                m.created_at
+                            );
+                        }
+                    }
+                }
+                SecretsCmd::Add {
+                    name,
+                    value,
+                    keychain,
+                } => {
+                    let val = match value {
+                        Some(v) => v,
+                        None => {
+                            // Read from stdin (one line) so value stays out of argv/history when possible.
+                            use std::io::{self, BufRead};
+                            let mut line = String::new();
+                            io::stdin().lock().read_line(&mut line)?;
+                            line.trim_end_matches(['\r', '\n']).to_string()
+                        }
+                    };
+                    if val.is_empty() {
+                        anyhow::bail!("empty secret value");
+                    }
+                    let meta = rel.add(&name, &val, keychain)?;
+                    // Never print the value.
+                    println!(
+                        "sealed {}  backend={}  ref={}",
+                        meta.name,
+                        match meta.backend {
+                            helix_reliquary::Backend::LocalSealed => "local-sealed",
+                            helix_reliquary::Backend::KeychainStub => "keychain-stub",
+                        },
+                        meta.ref_id
+                    );
+                }
+                SecretsCmd::Revoke { name } => {
+                    rel.revoke(&name)?;
+                    println!("revoked {name}");
                 }
             }
         }
