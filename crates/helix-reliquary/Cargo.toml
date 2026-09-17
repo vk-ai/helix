@@ -1,0 +1,14 @@
+[package]
+name = "helix-reliquary"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Helix Reliquary: named secret references and sealed local store"
+
+[dependencies]
+dirs.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+serde = { workspace = true }
+serde_json = { workspace = true }
+helix-memory = { workspace = true }
