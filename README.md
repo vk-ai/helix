@@ -7,9 +7,9 @@ capabilities you issued; secrets stay in the OS keychain; memory is files you
 can open, edit, and delete. The model never sees API keys or passwords.
 
 > Status: **early slice**. Daemon, CLI, charter packs, Ollama ask path, episode
-> write (`--accept` / `--edit` / `--reject`), preferences (`helix pref`), and
-> Reliquary catalog (`helix secrets`) work today. Wasm tools, Switch, and
-> connectors are next.
+> write (`--accept` / `--edit` / `--reject`), preferences (`helix pref`),
+> Reliquary catalog (`helix secrets`), and Ask protocol (`helix grant`) work
+> today. Biscuit tokens, Wasm tools, Switch, and connectors are next.
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
 [Install](#install) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
@@ -172,6 +172,23 @@ helix secrets revoke openai-key
 `list` shows only name, backend, ref id, and created time. Adapters will unwrap
 at a Switch boundary later; the model prompt never receives secret values.
 
+### 8. Ask protocol (capability grants)
+
+When the active charter has `writes_require_ask` (all packs today), adapters
+must obtain a user grant before performing a write. Grants live in helixd for
+the process lifetime:
+
+```bash
+# Simulate an adapter requesting permission (also used in tests):
+helix grant request plot.write "Write notes.md in the default plot"
+helix grant list
+helix grant allow-once g-20260918T...
+# or: helix grant allow-task <id>  |  helix grant deny <id>
+```
+
+`allow-once` is consumed after a single successful use; `allow-task` lasts until
+daemon restart. Decisions are appended to `chronicle/log.jsonl`.
+
 ---
 
 ## Platform notes
@@ -237,6 +254,8 @@ helix charter show
 - Preference CLI: `helix pref add|list|delete` and capped injection into ask
 - Reliquary catalog: `helix secrets list|add|revoke` (local sealed store +
   keychain stub; values never printed or put in model context)
+- Ask protocol: `helix grant list|request|allow-once|allow-task|deny` and
+  helixd `/v1/grants` endpoints; `writes_require_ask` enforced for adapters
 - Memory directories for episodes / playbooks / notes / prefs
 - Chronicle log file created
 
