@@ -8,6 +8,12 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Ask protocol: pending capability grants in helixd (`GET/POST /v1/grants`,
+  `POST /v1/grants/:id/decide`)
+- CLI: `helix grant list|request|allow-once|allow-task|deny`
+- `writes_require_ask` enforcement helper for future adapters (Once grants
+  are consumed on use; Task grants last until daemon restart)
+- Charter show prints `writes_require_ask`
 - Reliquary catalog (`helix-reliquary` crate): named secret references under
   `~/Helix/reliquary/` with local sealed store (`catalog.json` + `sealed.json`)
 - OS keychain backend stub (macOS Keychain / DPAPI / libsecret) — unwrap is

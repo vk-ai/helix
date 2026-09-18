@@ -36,7 +36,8 @@ propose/execute/select) is optional and not on the default path.
 
 1. Home + daemon + CLI + Ollama + memory dirs (shipped)
 2. Reliquary catalog + secrets CLI (shipped; keychain unwrap still stub)
-3. Ask protocol + Biscuit tokens
-4. Wasm Hands + Switch
-5. First adapter
-6. Browser pane with human take-over
+3. Ask protocol: pending grants + `helix grant` + `writes_require_ask` (shipped)
+4. Biscuit capability tokens
+5. Wasm Hands + Switch
+6. First adapter
+7. Browser pane with human take-over
