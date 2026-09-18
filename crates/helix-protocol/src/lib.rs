@@ -33,3 +33,81 @@ pub struct AskResponse {
 pub struct ErrorBody {
     pub error: String,
 }
+
+/// How long a grant remains usable after the user decides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GrantScope {
+    /// Single write/action; consumed after one successful use.
+    Once,
+    /// Valid for the duration of the current task/session (until revoke or daemon restart).
+    Task,
+}
+
+/// User decision on a pending grant request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GrantDecision {
+    AllowOnce,
+    AllowTask,
+    Deny,
+}
+
+/// Lifecycle of a grant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GrantStatus {
+    Pending,
+    Allowed,
+    Denied,
+    Consumed,
+}
+
+/// A capability request that must be approved when `writes_require_ask` is true.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Grant {
+    pub id: String,
+    pub created_at: String,
+    /// Short machine action key, e.g. `plot.write`, `mail.send`.
+    pub action: String,
+    /// Human-readable summary shown in CLI / future Ask banner.
+    pub summary: String,
+    /// Optional adapter or tool that requested the grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requester: Option<String>,
+    pub status: GrantStatus,
+    /// Set when status is Allowed (Once or Task).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<GrantScope>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decided_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateGrantRequest {
+    pub action: String,
+    pub summary: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requester: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecideGrantRequest {
+    pub decision: GrantDecision,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrantListResponse {
+    pub grants: Vec<Grant>,
+}
+
+/// Result of checking whether a write may proceed under the active charter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WritePermission {
+    /// Charter does not require Ask for writes, or a matching Allowed grant exists.
+    Allowed,
+    /// Charter has `writes_require_ask` and no usable grant for this action.
+    NeedsGrant,
+    /// A pending grant already exists for this action (wait for user decision).
+    PendingExists,
+}
