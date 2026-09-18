@@ -1,7 +1,10 @@
 use clap::{Parser, Subcommand};
 use helix_charter::Charter;
 use helix_memory::{new_episode, HelixHome, Verdict};
-use helix_protocol::{AskRequest, AskResponse, Status, DEFAULT_BIND, DEFAULT_PACK};
+use helix_protocol::{
+    AskRequest, AskResponse, CreateGrantRequest, DecideGrantRequest, Grant, GrantDecision,
+    GrantListResponse, Status, DEFAULT_BIND, DEFAULT_PACK,
+};
 use helix_reliquary::Reliquary;
 
 #[derive(Parser)]
@@ -34,6 +37,11 @@ enum Commands {
     Secrets {
         #[command(subcommand)]
         action: SecretsCmd,
+    },
+    /// Approve or deny pending capability grants (Ask protocol)
+    Grant {
+        #[command(subcommand)]
+        action: GrantCmd,
     },
     /// Send a message through the local daemon
     Ask {
@@ -89,6 +97,29 @@ enum SecretsCmd {
     Revoke { name: String },
 }
 
+#[derive(Subcommand)]
+enum GrantCmd {
+    /// List pending and decided grants from helixd
+    List,
+    /// Create a pending grant (for testing / future adapters)
+    Request {
+        /// Action key, e.g. plot.write
+        action: String,
+        /// Human-readable summary
+        summary: String,
+        #[arg(long)]
+        requester: Option<String>,
+    },
+    /// Allow a pending grant for a single use
+    #[command(name = "allow-once")]
+    AllowOnce { id: String },
+    /// Allow a pending grant for the current task/session
+    #[command(name = "allow-task")]
+    AllowTask { id: String },
+    /// Deny a pending grant
+    Deny { id: String },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -132,6 +163,7 @@ async fn main() -> anyhow::Result<()> {
                     println!("cloud    {}", c.allow_cloud_model);
                     println!("network  {}", c.allow_network_adapters);
                     println!("shell    {}", c.allow_shell);
+                    println!("writes_require_ask {}", c.writes_require_ask);
                 }
                 CharterCmd::Set { pack } => {
                     Charter::builtin(&pack)?;
@@ -225,6 +257,63 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        Commands::Grant { action } => {
+            let url = daemon_url();
+            let client = reqwest::Client::new();
+            match action {
+                GrantCmd::List => {
+                    let res = client
+                        .get(format!("{url}/v1/grants"))
+                        .send()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("daemon not reachable at {url} ({e})"))?;
+                    if !res.status().is_success() {
+                        let body = res.text().await.unwrap_or_default();
+                        anyhow::bail!("list grants failed: {body}");
+                    }
+                    let body: GrantListResponse = res.json().await?;
+                    if body.grants.is_empty() {
+                        println!("(no grants)");
+                    } else {
+                        for g in body.grants {
+                            print_grant(&g);
+                        }
+                    }
+                }
+                GrantCmd::Request {
+                    action,
+                    summary,
+                    requester,
+                } => {
+                    let res = client
+                        .post(format!("{url}/v1/grants"))
+                        .json(&CreateGrantRequest {
+                            action,
+                            summary,
+                            requester,
+                        })
+                        .send()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("daemon not reachable at {url} ({e})"))?;
+                    if !res.status().is_success() {
+                        let body = res.text().await.unwrap_or_default();
+                        anyhow::bail!("create grant failed: {body}");
+                    }
+                    let g: Grant = res.json().await?;
+                    println!("pending grant created");
+                    print_grant(&g);
+                }
+                GrantCmd::AllowOnce { id } => {
+                    decide(&client, &url, &id, GrantDecision::AllowOnce).await?;
+                }
+                GrantCmd::AllowTask { id } => {
+                    decide(&client, &url, &id, GrantDecision::AllowTask).await?;
+                }
+                GrantCmd::Deny { id } => {
+                    decide(&client, &url, &id, GrantDecision::Deny).await?;
+                }
+            }
+        }
         Commands::Ask {
             text,
             accept,
@@ -285,6 +374,39 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+fn print_grant(g: &Grant) {
+    let scope = g
+        .scope
+        .map(|s| format!("{s:?}"))
+        .unwrap_or_else(|| "-".into());
+    println!(
+        "{}  status={:?}  scope={}  action={}  {}",
+        g.id, g.status, scope, g.action, g.summary
+    );
+}
+
+async fn decide(
+    client: &reqwest::Client,
+    url: &str,
+    id: &str,
+    decision: GrantDecision,
+) -> anyhow::Result<()> {
+    let res = client
+        .post(format!("{url}/v1/grants/{id}/decide"))
+        .json(&DecideGrantRequest { decision })
+        .send()
+        .await
+        .map_err(|e| anyhow::anyhow!("daemon not reachable at {url} ({e})"))?;
+    if !res.status().is_success() {
+        let body = res.text().await.unwrap_or_default();
+        anyhow::bail!("decide failed: {body}");
+    }
+    let g: Grant = res.json().await?;
+    println!("grant updated");
+    print_grant(&g);
     Ok(())
 }
 
