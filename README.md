@@ -8,8 +8,9 @@ can open, edit, and delete. The model never sees API keys or passwords.
 
 > Status: **early slice**. Daemon, CLI, charter packs, Ollama ask path, episode
 > write (`--accept` / `--edit` / `--reject`), preferences (`helix pref`),
-> Reliquary catalog (`helix secrets`), and Ask protocol (`helix grant`) work
-> today. Biscuit tokens, Wasm tools, Switch, and connectors are next.
+> Reliquary catalog (`helix secrets`), Ask protocol (`helix grant`), and
+> shrink-only capability tokens (`helix token`) work today. Switch, Wasm Hands,
+> and connectors are next.
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
 [Install](#install) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
@@ -189,6 +190,27 @@ helix grant allow-once g-20260918T...
 `allow-once` is consumed after a single successful use; `allow-task` lasts until
 daemon restart. Decisions are appended to `chronicle/log.jsonl`.
 
+### 9. Capability tokens (shrink-only)
+
+helixd issues HMAC-signed tokens capped by the active charter. A holder may only
+*attenuate* (drop rights); widening is rejected. Tokens use an ephemeral session
+key and become invalid when the daemon restarts.
+
+```bash
+# Full hearthside set (plot.read, plot.write, local.model):
+helix token issue
+# Subset:
+helix token issue --rights plot.read,local.model --ttl 3600 > /tmp/t.json
+helix token show @/tmp/t.json
+helix token verify @/tmp/t.json --require plot.read
+# Shrink further (cannot add shell or network):
+helix token attenuate @/tmp/t.json --keep plot.read > /tmp/t2.json
+```
+
+Rights: `local.model`, `plot.read`, `plot.write`, `network.adapter`, `shell`,
+`cloud.model`. Future Hands/adapters will carry these tokens; the model never
+forges them.
+
 ---
 
 ## Platform notes
@@ -256,6 +278,8 @@ helix charter show
   keychain stub; values never printed or put in model context)
 - Ask protocol: `helix grant list|request|allow-once|allow-task|deny` and
   helixd `/v1/grants` endpoints; `writes_require_ask` enforced for adapters
+- Capability tokens: `helix token issue|attenuate|verify|show` (shrink-only;
+  charter-capped rights)
 - Memory directories for episodes / playbooks / notes / prefs
 - Chronicle log file created
 
@@ -263,7 +287,6 @@ helix charter show
 
 - Real OS-keychain unwrap (macOS / DPAPI / libsecret)
 - Wasm Hands / Wasmtime tools
-- Biscuit capability tokens
 - Switch egress proxy
 - Desktop app (Tauri)
 - Mail / calendar / browser adapters
@@ -299,6 +322,7 @@ helix/
     helix-charter/    pack load + summary
     helix-memory/     home layout + retrieval stub
     helix-reliquary/  named secret references + sealed store
+    helix-cap/        shrink-only capability tokens
   charter-packs/      hearthside, desk, workshop
   docs/               architecture and threat model
 ```

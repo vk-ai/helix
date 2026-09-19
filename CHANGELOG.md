@@ -8,6 +8,13 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Shrink-only capability tokens (`helix-cap` crate): HMAC-SHA256 tokens issued by
+  helixd; attenuation may only remove rights (Biscuit-equivalent, no widen)
+- helixd: `POST /v1/tokens`, `/v1/tokens/attenuate`, `/v1/tokens/verify`
+- CLI: `helix token issue|attenuate|verify|show`
+- Rights keyed to charter: `local.model`, `plot.read`, `plot.write`,
+  `network.adapter`, `shell`, `cloud.model`
+- Session MAC key is ephemeral (tokens invalid after daemon restart)
 - Ask protocol: pending capability grants in helixd (`GET/POST /v1/grants`,
   `POST /v1/grants/:id/decide`)
 - CLI: `helix grant list|request|allow-once|allow-task|deny`

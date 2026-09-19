@@ -5,7 +5,7 @@ model is frozen. Authority is issued, never assumed.
 
 ## Processes
 
-- **helixd** — privileged daemon on loopback. Owns home layout, charter, chronicle, and Loom calls.
+- **helixd** — privileged daemon on loopback. Owns home layout, charter, chronicle, Loom calls, and capability token MAC key.
 - **helix** — CLI. Talks only to `helixd`.
 - **Hands** (later) — Wasmtime components with deny-by-default WASI.
 - **Adapters** (later) — native processes for mail, browser, OS APIs.
@@ -26,6 +26,13 @@ model is frozen. Authority is issued, never assumed.
 Secret values live in Reliquary (local sealed store today; OS keychain later).
 They are references in catalog until unwrap at an adapter/Switch boundary.
 
+## Capability tokens
+
+`helix-cap` issues shrink-only tokens (HMAC-SHA256 over a canonical payload).
+Rights are drawn from the active charter and may only be reduced by attenuation.
+The daemon holds an ephemeral session key; tokens do not survive restart.
+This is the product equivalent of Biscuit attenuation without the full biscuit-auth stack on the default path.
+
 ## Learning
 
 No LoRA. Everyday improvement is retrieval of playbooks, tool notes, and
@@ -37,7 +44,7 @@ propose/execute/select) is optional and not on the default path.
 1. Home + daemon + CLI + Ollama + memory dirs (shipped)
 2. Reliquary catalog + secrets CLI (shipped; keychain unwrap still stub)
 3. Ask protocol: pending grants + `helix grant` + `writes_require_ask` (shipped)
-4. Biscuit capability tokens
-5. Wasm Hands + Switch
-6. First adapter
+4. Capability tokens: issue / attenuate / verify (shipped)
+5. Switch egress proxy
+6. Wasm Hands + first adapter
 7. Browser pane with human take-over
