@@ -9,6 +9,7 @@ description = "Helix local daemon"
 helix-protocol.workspace = true
 helix-charter.workspace = true
 helix-memory.workspace = true
+helix-cap.workspace = true
 anyhow.workspace = true
 axum.workspace = true
 chrono.workspace = true

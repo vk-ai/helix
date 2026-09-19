@@ -111,3 +111,43 @@ pub enum WritePermission {
     /// A pending grant already exists for this action (wait for user decision).
     PendingExists,
 }
+
+// --- Capability tokens (shrink-only) ---
+
+/// Issue a root token with full charter rights, or a subset if `rights` is set.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IssueTokenRequest {
+    /// Optional subset of charter rights. If empty/omitted, issue full charter set.
+    #[serde(default)]
+    pub rights: Vec<String>,
+    /// Optional TTL in seconds. Tokens without TTL last until daemon restart (MAC key is ephemeral).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ttl_secs: Option<u64>,
+}
+
+/// Attenuate an existing token to a subset of its rights.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttenuateTokenRequest {
+    pub token: serde_json::Value,
+    /// Rights to keep (must be a subset of the parent token).
+    pub keep: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ttl_secs: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifyTokenRequest {
+    pub token: serde_json::Value,
+    /// Optional right that must be present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub require: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifyTokenResponse {
+    pub valid: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rights: Option<Vec<String>>,
+}
