@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
@@ -8,12 +8,14 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use helix_cap::{rights_for_charter, CapAuthority, CapToken};
 use helix_charter::Charter;
 use helix_memory::{HelixHome, PREFS_CONTEXT_CHAR_CAP};
 use helix_protocol::{
-    AskRequest, AskResponse, CreateGrantRequest, DecideGrantRequest, ErrorBody, Grant,
-    GrantDecision, GrantListResponse, GrantScope, GrantStatus, Status, WritePermission,
-    DEFAULT_BIND, DEFAULT_MODEL, DEFAULT_OLLAMA,
+    AskRequest, AskResponse, AttenuateTokenRequest, CreateGrantRequest, DecideGrantRequest,
+    ErrorBody, Grant, GrantDecision, GrantListResponse, GrantScope, GrantStatus, IssueTokenRequest,
+    Status, VerifyTokenRequest, VerifyTokenResponse, WritePermission, DEFAULT_BIND, DEFAULT_MODEL,
+    DEFAULT_OLLAMA,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -25,6 +27,8 @@ struct App {
     ollama: String,
     /// In-memory pending/allowed grants for this daemon process.
     grants: Mutex<HashMap<String, Grant>>,
+    /// Session MAC key for capability tokens (ephemeral; tokens die on restart).
+    caps: CapAuthority,
 }
 
 #[tokio::main]
@@ -44,6 +48,7 @@ async fn main() -> anyhow::Result<()> {
         model,
         ollama,
         grants: Mutex::new(HashMap::new()),
+        caps: CapAuthority::new_random(),
     });
 
     let router = Router::new()
@@ -52,6 +57,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/ask", post(ask))
         .route("/v1/grants", get(list_grants).post(create_grant))
         .route("/v1/grants/:id/decide", post(decide_grant))
+        .route("/v1/tokens", post(issue_token))
+        .route("/v1/tokens/attenuate", post(attenuate_token))
+        .route("/v1/tokens/verify", post(verify_token))
         .with_state(app);
 
     let addr: SocketAddr = bind.parse()?;
@@ -279,6 +287,143 @@ async fn decide_grant(
     Ok(Json(out))
 }
 
+async fn issue_token(
+    State(app): State<Arc<App>>,
+    Json(req): Json<IssueTokenRequest>,
+) -> Result<Json<CapToken>, (StatusCode, Json<ErrorBody>)> {
+    let pack_name = app.home.read_pack().unwrap_or_else(|_| "hearthside".into());
+    let charter = Charter::builtin(&pack_name).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorBody {
+                error: e.to_string(),
+            }),
+        )
+    })?;
+
+    let max = rights_for_charter(
+        charter.allow_local_model,
+        charter.allow_cloud_model,
+        charter.allow_network_adapters,
+        charter.allow_shell,
+    );
+
+    let rights: BTreeSet<String> = if req.rights.is_empty() {
+        max.clone()
+    } else {
+        let requested: BTreeSet<String> = req.rights.into_iter().collect();
+        if !requested.is_subset(&max) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ErrorBody {
+                    error: format!(
+                        "requested rights exceed charter {pack_name}; allowed: {}",
+                        max.iter().cloned().collect::<Vec<_>>().join(", ")
+                    ),
+                }),
+            ));
+        }
+        requested
+    };
+
+    let token = app.caps.issue(rights, req.ttl_secs).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorBody {
+                error: e.to_string(),
+            }),
+        )
+    })?;
+
+    let _ = app.home.append_chronicle(
+        &json!({
+            "ts": chrono::Utc::now().to_rfc3339(),
+            "kind": "token_issue",
+            "id": token.id,
+            "rights": token.rights.iter().cloned().collect::<Vec<_>>(),
+        })
+        .to_string(),
+    );
+
+    Ok(Json(token))
+}
+
+async fn attenuate_token(
+    State(app): State<Arc<App>>,
+    Json(req): Json<AttenuateTokenRequest>,
+) -> Result<Json<CapToken>, (StatusCode, Json<ErrorBody>)> {
+    let parent: CapToken = serde_json::from_value(req.token).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorBody {
+                error: format!("invalid token json: {e}"),
+            }),
+        )
+    })?;
+    let keep: BTreeSet<String> = req.keep.into_iter().collect();
+    let child = app.caps.attenuate(&parent, keep, req.ttl_secs).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorBody {
+                error: e.to_string(),
+            }),
+        )
+    })?;
+
+    let _ = app.home.append_chronicle(
+        &json!({
+            "ts": chrono::Utc::now().to_rfc3339(),
+            "kind": "token_attenuate",
+            "id": child.id,
+            "parent": child.parent,
+            "rights": child.rights.iter().cloned().collect::<Vec<_>>(),
+        })
+        .to_string(),
+    );
+
+    Ok(Json(child))
+}
+
+async fn verify_token(
+    State(app): State<Arc<App>>,
+    Json(req): Json<VerifyTokenRequest>,
+) -> Json<VerifyTokenResponse> {
+    let token: CapToken = match serde_json::from_value(req.token) {
+        Ok(t) => t,
+        Err(e) => {
+            return Json(VerifyTokenResponse {
+                valid: false,
+                error: Some(format!("invalid token json: {e}")),
+                rights: None,
+            });
+        }
+    };
+
+    match app.caps.verify(&token) {
+        Ok(()) => {
+            if let Some(ref right) = req.require {
+                if !token.rights.contains(right) {
+                    return Json(VerifyTokenResponse {
+                        valid: false,
+                        error: Some(format!("missing right: {right}")),
+                        rights: Some(token.rights.iter().cloned().collect()),
+                    });
+                }
+            }
+            Json(VerifyTokenResponse {
+                valid: true,
+                error: None,
+                rights: Some(token.rights.iter().cloned().collect()),
+            })
+        }
+        Err(e) => Json(VerifyTokenResponse {
+            valid: false,
+            error: Some(e.to_string()),
+            rights: None,
+        }),
+    }
+}
+
 /// Enforce `writes_require_ask` for future adapters.
 ///
 /// Returns whether the write may proceed, needs a new grant, or should wait on a pending one.
@@ -403,6 +548,7 @@ mod tests {
             model: DEFAULT_MODEL.into(),
             ollama: DEFAULT_OLLAMA.into(),
             grants: Mutex::new(HashMap::new()),
+            caps: CapAuthority::from_bytes([1u8; 32]),
         };
         assert_eq!(
             check_write_permission(&app, "plot.write"),
@@ -430,6 +576,7 @@ mod tests {
             model: DEFAULT_MODEL.into(),
             ollama: DEFAULT_OLLAMA.into(),
             grants: Mutex::new(HashMap::new()),
+            caps: CapAuthority::from_bytes([1u8; 32]),
         };
         {
             let mut map = app.grants.lock().unwrap();
