@@ -2,10 +2,12 @@ use clap::{Parser, Subcommand};
 use helix_charter::Charter;
 use helix_memory::{new_episode, HelixHome, Verdict};
 use helix_protocol::{
-    AskRequest, AskResponse, CreateGrantRequest, DecideGrantRequest, Grant, GrantDecision,
-    GrantListResponse, Status, DEFAULT_BIND, DEFAULT_PACK,
+    AskRequest, AskResponse, AttenuateTokenRequest, CreateGrantRequest, DecideGrantRequest, Grant,
+    GrantDecision, GrantListResponse, IssueTokenRequest, Status, VerifyTokenRequest,
+    VerifyTokenResponse, DEFAULT_BIND, DEFAULT_PACK,
 };
 use helix_reliquary::Reliquary;
+use serde_json::Value;
 
 #[derive(Parser)]
 #[command(name = "helix", version, about = "Helix local personal agent")]
@@ -42,6 +44,11 @@ enum Commands {
     Grant {
         #[command(subcommand)]
         action: GrantCmd,
+    },
+    /// Shrink-only capability tokens issued by helixd
+    Token {
+        #[command(subcommand)]
+        action: TokenCmd,
     },
     /// Send a message through the local daemon
     Ask {
@@ -118,6 +125,42 @@ enum GrantCmd {
     AllowTask { id: String },
     /// Deny a pending grant
     Deny { id: String },
+}
+
+#[derive(Subcommand)]
+enum TokenCmd {
+    /// Issue a root token capped by the active charter (JSON on stdout)
+    Issue {
+        /// Restrict to these rights (comma-separated). Default: full charter set.
+        #[arg(long, value_delimiter = ',')]
+        rights: Vec<String>,
+        /// Optional TTL in seconds
+        #[arg(long)]
+        ttl: Option<u64>,
+    },
+    /// Attenuate a token to a subset of its rights (cannot widen)
+    Attenuate {
+        /// Parent token JSON (or path via @file; use - for stdin)
+        token: String,
+        /// Rights to keep (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        keep: Vec<String>,
+        #[arg(long)]
+        ttl: Option<u64>,
+    },
+    /// Verify a token with helixd
+    Verify {
+        /// Token JSON (or @file / -)
+        token: String,
+        /// Require this right
+        #[arg(long)]
+        require: Option<String>,
+    },
+    /// Pretty-print token fields without verifying the MAC
+    Show {
+        /// Token JSON (or @file / -)
+        token: String,
+    },
 }
 
 #[tokio::main]
@@ -229,7 +272,6 @@ async fn main() -> anyhow::Result<()> {
                     let val = match value {
                         Some(v) => v,
                         None => {
-                            // Read from stdin (one line) so value stays out of argv/history when possible.
                             use std::io::{self, BufRead};
                             let mut line = String::new();
                             io::stdin().lock().read_line(&mut line)?;
@@ -240,7 +282,6 @@ async fn main() -> anyhow::Result<()> {
                         anyhow::bail!("empty secret value");
                     }
                     let meta = rel.add(&name, &val, keychain)?;
-                    // Never print the value.
                     println!(
                         "sealed {}  backend={}  ref={}",
                         meta.name,
@@ -314,6 +355,108 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        Commands::Token { action } => {
+            let url = daemon_url();
+            let client = reqwest::Client::new();
+            match action {
+                TokenCmd::Issue { rights, ttl } => {
+                    let res = client
+                        .post(format!("{url}/v1/tokens"))
+                        .json(&IssueTokenRequest {
+                            rights,
+                            ttl_secs: ttl,
+                        })
+                        .send()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("daemon not reachable at {url} ({e})"))?;
+                    if !res.status().is_success() {
+                        let body = res.text().await.unwrap_or_default();
+                        anyhow::bail!("issue token failed: {body}");
+                    }
+                    let token: Value = res.json().await?;
+                    println!("{}", serde_json::to_string_pretty(&token)?);
+                }
+                TokenCmd::Attenuate { token, keep, ttl } => {
+                    let token_val = read_token_json(&token)?;
+                    let res = client
+                        .post(format!("{url}/v1/tokens/attenuate"))
+                        .json(&AttenuateTokenRequest {
+                            token: token_val,
+                            keep,
+                            ttl_secs: ttl,
+                        })
+                        .send()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("daemon not reachable at {url} ({e})"))?;
+                    if !res.status().is_success() {
+                        let body = res.text().await.unwrap_or_default();
+                        anyhow::bail!("attenuate failed: {body}");
+                    }
+                    let out: Value = res.json().await?;
+                    println!("{}", serde_json::to_string_pretty(&out)?);
+                }
+                TokenCmd::Verify { token, require } => {
+                    let token_val = read_token_json(&token)?;
+                    let res = client
+                        .post(format!("{url}/v1/tokens/verify"))
+                        .json(&VerifyTokenRequest {
+                            token: token_val,
+                            require,
+                        })
+                        .send()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("daemon not reachable at {url} ({e})"))?;
+                    if !res.status().is_success() {
+                        let body = res.text().await.unwrap_or_default();
+                        anyhow::bail!("verify failed: {body}");
+                    }
+                    let body: VerifyTokenResponse = res.json().await?;
+                    if body.valid {
+                        println!("valid");
+                        if let Some(r) = body.rights {
+                            println!("rights  {}", r.join(", "));
+                        }
+                    } else {
+                        println!("invalid");
+                        if let Some(e) = body.error {
+                            println!("error   {e}");
+                        }
+                        std::process::exit(1);
+                    }
+                }
+                TokenCmd::Show { token } => {
+                    let token_val = read_token_json(&token)?;
+                    if let Some(obj) = token_val.as_object() {
+                        if let Some(id) = obj.get("id") {
+                            println!("id       {}", id);
+                        }
+                        if let Some(p) = obj.get("parent") {
+                            println!("parent   {}", p);
+                        }
+                        if let Some(i) = obj.get("issued_at") {
+                            println!("issued   {}", i);
+                        }
+                        if let Some(e) = obj.get("expires_at") {
+                            println!("expires  {}", e);
+                        }
+                        if let Some(r) = obj.get("rights") {
+                            println!("rights   {}", r);
+                        }
+                        if let Some(m) = obj.get("mac") {
+                            let s = m.as_str().unwrap_or("");
+                            let preview = if s.len() > 16 {
+                                format!("{}…", &s[..16])
+                            } else {
+                                s.to_string()
+                            };
+                            println!("mac      {preview}");
+                        }
+                    } else {
+                        println!("{}", serde_json::to_string_pretty(&token_val)?);
+                    }
+                }
+            }
+        }
         Commands::Ask {
             text,
             accept,
@@ -375,6 +518,20 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+fn read_token_json(spec: &str) -> anyhow::Result<Value> {
+    let raw = if spec == "-" {
+        use std::io::Read;
+        let mut buf = String::new();
+        std::io::stdin().read_to_string(&mut buf)?;
+        buf
+    } else if let Some(path) = spec.strip_prefix('@') {
+        std::fs::read_to_string(path)?
+    } else {
+        spec.to_string()
+    };
+    Ok(serde_json::from_str(raw.trim())?)
 }
 
 fn print_grant(g: &Grant) {
