@@ -17,6 +17,7 @@ use helix_protocol::{
     Status, VerifyTokenRequest, VerifyTokenResponse, WritePermission, DEFAULT_BIND, DEFAULT_MODEL,
     DEFAULT_OLLAMA,
 };
+use helix_switch::Switch;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -78,9 +79,17 @@ async fn health() -> &'static str {
     "ok\n"
 }
 
+fn current_switch(app: &App) -> Switch {
+    let pack = app.home.read_pack().unwrap_or_else(|_| "hearthside".into());
+    Switch::for_pack(&pack).unwrap_or_else(|_| {
+        Switch::for_pack("hearthside").expect("hearthside always exists")
+    })
+}
+
 async fn status(State(app): State<Arc<App>>) -> Json<Status> {
     let pack = app.home.read_pack().unwrap_or_else(|_| "hearthside".into());
-    let ollama_reachable = ollama_ok(&app.ollama).await;
+    let switch = current_switch(&app);
+    let ollama_reachable = ollama_ok(&app, &switch).await;
     Json(Status {
         home: app.home.root.display().to_string(),
         bind: app.bind.clone(),
@@ -89,6 +98,7 @@ async fn status(State(app): State<Arc<App>>) -> Json<Status> {
         ollama: app.ollama.clone(),
         ollama_reachable,
         version: env!("CARGO_PKG_VERSION").into(),
+        switch: Some(switch.summary()),
     })
 }
 
@@ -122,7 +132,9 @@ async fn ask(
         format!("{prefs}\n{retrieved}")
     };
 
-    let (reply, model_used) = match loom_complete(&app, &charter, &memory, &req.text).await {
+    let switch = Switch::from_charter(&charter);
+    let (reply, model_used) = match loom_complete(&app, &charter, &switch, &memory, &req.text).await
+    {
         Ok(text) => (text, true),
         Err(err) => (
             format!(
@@ -475,9 +487,13 @@ pub fn check_write_permission(app: &App, action: &str) -> WritePermission {
     }
 }
 
-async fn ollama_ok(base: &str) -> bool {
+async fn ollama_ok(app: &App, switch: &Switch) -> bool {
+    let url = format!("{}/api/tags", app.ollama);
+    if switch.check(&url).is_err() {
+        return false;
+    }
     reqwest::Client::new()
-        .get(format!("{base}/api/tags"))
+        .get(&url)
         .send()
         .await
         .map(|r| r.status().is_success())
@@ -489,15 +505,22 @@ struct OllamaResponse {
     response: Option<String>,
 }
 
+/// Loom completion path — must pass Switch before any network I/O.
 async fn loom_complete(
     app: &App,
     charter: &Charter,
+    switch: &Switch,
     memory: &str,
     user: &str,
 ) -> anyhow::Result<String> {
     if !charter.allow_local_model {
         anyhow::bail!("local model not allowed by charter");
     }
+    let generate_url = format!("{}/api/generate", app.ollama);
+    switch
+        .check(&generate_url)
+        .map_err(|e| anyhow::anyhow!("switch denied egress: {e}"))?;
+
     let prompt = format!(
         "You are Helix, a local personal agent.\n\
          You have no tools and no secrets in this slice.\n\
@@ -513,7 +536,7 @@ async fn loom_complete(
         "stream": false,
     });
     let res = reqwest::Client::new()
-        .post(format!("{}/api/generate", app.ollama))
+        .post(&generate_url)
         .json(&body)
         .send()
         .await?
@@ -604,5 +627,14 @@ mod tests {
             WritePermission::NeedsGrant
         );
         let _ = std::fs::remove_dir_all(&app.home.root);
+    }
+
+    #[test]
+    fn switch_blocks_non_loopback_ollama_url() {
+        let s = Switch::for_pack("hearthside").unwrap();
+        assert!(s.check("http://127.0.0.1:11434/api/generate").is_ok());
+        assert!(s
+            .check("https://api.openai.com/v1/chat/completions")
+            .is_err());
     }
 }
