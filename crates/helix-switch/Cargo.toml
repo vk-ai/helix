@@ -1,0 +1,12 @@
+[package]
+name = "helix-switch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Helix sole egress proxy — allowlist per charter; Loom cannot raw-dial"
+
+[dependencies]
+helix-charter.workspace = true
+thiserror.workspace = true
+serde = { workspace = true }
+url = "2"
