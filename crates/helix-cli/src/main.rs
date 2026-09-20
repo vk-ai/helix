@@ -497,38 +497,55 @@ async fn main() -> anyhow::Result<()> {
                 None
             };
 
-            if let Some(v) = verdict {
+            if let Some(verdict) = verdict {
                 let home = HelixHome::resolve()?;
-                home.init(&home.read_pack().unwrap_or_else(|_| DEFAULT_PACK.into()))?;
-                let outcome = edit.unwrap_or_else(|| body.reply.clone());
-                let path = new_episode(&home, &text, &outcome, v)?;
+                home.init(&body.pack)?;
+                let episode = new_episode(
+                    &text,
+                    &body.reply,
+                    edit.clone(),
+                    verdict,
+                    &body.pack,
+                    body.model_used,
+                );
+                let path = home.write_episode(&episode)?;
                 println!("--- episode ---");
-                println!("wrote {}", path.display());
+                println!("verdict  {:?}", verdict);
+                println!("wrote    {}", path.display());
+                if matches!(verdict, Verdict::Accept | Verdict::Edit) {
+                    println!(
+                        "(playbook may appear under memory/playbooks/ after two similar successes)"
+                    );
+                }
             }
         }
     }
     Ok(())
 }
 
-fn daemon_url() -> String {
-    let bind = std::env::var("HELIX_BIND").unwrap_or_else(|_| DEFAULT_BIND.into());
-    format!("http://{bind}")
+fn read_token_json(spec: &str) -> anyhow::Result<Value> {
+    let raw = if spec == "-" {
+        use std::io::Read;
+        let mut buf = String::new();
+        std::io::stdin().read_to_string(&mut buf)?;
+        buf
+    } else if let Some(path) = spec.strip_prefix('@') {
+        std::fs::read_to_string(path)?
+    } else {
+        spec.to_string()
+    };
+    Ok(serde_json::from_str(raw.trim())?)
 }
 
 fn print_grant(g: &Grant) {
+    let scope = g
+        .scope
+        .map(|s| format!("{s:?}"))
+        .unwrap_or_else(|| "-".into());
     println!(
-        "{}  {:?}  action={}  {}",
-        g.id,
-        g.status,
-        g.action,
-        g.summary
+        "{}  status={:?}  scope={}  action={}  {}",
+        g.id, g.status, scope, g.action, g.summary
     );
-    if let Some(ref s) = g.scope {
-        println!("  scope={:?}", s);
-    }
-    if let Some(ref r) = g.requester {
-        println!("  requester={r}");
-    }
 }
 
 async fn decide(
@@ -548,21 +565,12 @@ async fn decide(
         anyhow::bail!("decide failed: {body}");
     }
     let g: Grant = res.json().await?;
-    println!("decision recorded");
+    println!("grant updated");
     print_grant(&g);
     Ok(())
 }
 
-fn read_token_json(spec: &str) -> anyhow::Result<Value> {
-    let raw = if spec == "-" {
-        use std::io::Read;
-        let mut s = String::new();
-        std::io::stdin().read_to_string(&mut s)?;
-        s
-    } else if let Some(path) = spec.strip_prefix('@') {
-        std::fs::read_to_string(path)?
-    } else {
-        spec.to_string()
-    };
-    Ok(serde_json::from_str(raw.trim())?)
+fn daemon_url() -> String {
+    let bind = std::env::var("HELIX_BIND").unwrap_or_else(|_| DEFAULT_BIND.into());
+    format!("http://{bind}")
 }
