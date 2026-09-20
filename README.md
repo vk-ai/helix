@@ -8,8 +8,9 @@ can open, edit, and delete. The model never sees API keys or passwords.
 
 > Status: **early slice**. Daemon, CLI, charter packs, Ollama ask path, episode
 > write (`--accept` / `--edit` / `--reject`), preferences (`helix pref`),
-> Reliquary catalog (`helix secrets`), Ask protocol (`helix grant`), and
-> shrink-only capability tokens (`helix token`) work today. Switch, Wasm Hands,
+> Reliquary catalog (`helix secrets`), Ask protocol (`helix grant`),
+> shrink-only capability tokens (`helix token`), and Switch egress
+> (Loom dials only through the charter allowlist) work today. Wasm Hands
 > and connectors are next.
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
@@ -26,6 +27,7 @@ can open, edit, and delete. The model never sees API keys or passwords.
 | Secrets stay sealed | Reliquary stores references. Unwrap happens per approved call, never in the prompt. |
 | Memory you can read | Episodes, playbooks, tool notes, and preferences live under `~/Helix/memory`. |
 | Frozen weights | Everyday improvement is retrieval of what worked for *you*. No LoRA in the product path. |
+| Sole egress | Switch is the only outbound path. Hearthside may dial Ollama loopback only. |
 
 Helix is **not** a chatbot that inherits your login session.
 
@@ -116,7 +118,8 @@ Check it:
 helix status
 ```
 
-You should see the home path, charter pack, and whether Ollama is reachable.
+You should see the home path, charter pack, Switch summary, and whether Ollama
+is reachable.
 
 ### 5. Talk to Helix
 
@@ -211,6 +214,17 @@ Rights: `local.model`, `plot.read`, `plot.write`, `network.adapter`, `shell`,
 `cloud.model`. Future Hands/adapters will carry these tokens; the model never
 forges them.
 
+### 10. Switch (egress)
+
+All Loom HTTP goes through Switch. Under **hearthside**, only loopback Ollama
+URLs are allowed. Setting `HELIX_OLLAMA` to a remote host is denied. Desk and
+workshop flags for cloud/network do not open arbitrary hosts until an allow
+entry is seeded for a real adapter.
+
+```bash
+helix status   # includes a switch=… summary line from helixd
+```
+
 ---
 
 ## Platform notes
@@ -246,7 +260,7 @@ Environment variables override the file:
 | `HELIX_HOME` | `~/Helix` | Data directory |
 | `HELIX_BIND` | `127.0.0.1:7420` | Daemon listen address |
 | `HELIX_MODEL` | `llama3.2` | Ollama model tag |
-| `HELIX_OLLAMA` | `http://127.0.0.1:11434` | Ollama base URL |
+| `HELIX_OLLAMA` | `http://127.0.0.1:11434` | Ollama base URL (must pass Switch) |
 | `HELIX_PACK` | `hearthside` | Charter pack: `hearthside`, `desk`, `workshop` |
 
 Charter packs live in [`charter-packs/`](charter-packs/):
@@ -270,7 +284,7 @@ helix charter show
 
 - Local home layout and charter packs
 - Daemon on loopback
-- `helix ask` against Ollama
+- `helix ask` against Ollama (via Switch)
 - Episode write path: `helix ask "…" --accept` / `--reject` / `--edit "…"`
 - Optional playbook promotion after two similar successes
 - Preference CLI: `helix pref add|list|delete` and capped injection into ask
@@ -280,6 +294,7 @@ helix charter show
   helixd `/v1/grants` endpoints; `writes_require_ask` enforced for adapters
 - Capability tokens: `helix token issue|attenuate|verify|show` (shrink-only;
   charter-capped rights)
+- Switch egress: Loom checked against charter allowlist before any dial
 - Memory directories for episodes / playbooks / notes / prefs
 - Chronicle log file created
 
@@ -287,10 +302,10 @@ helix charter show
 
 - Real OS-keychain unwrap (macOS / DPAPI / libsecret)
 - Wasm Hands / Wasmtime tools
-- Switch egress proxy
 - Desktop app (Tauri)
 - Mail / calendar / browser adapters
 - Human take-over for CAPTCHA (browser pane)
+- Seeded remote hosts for cloud Loom
 
 Learning stays **file-based**. Helix does not fine-tune the model. After you
 accept or edit a result, an episode JSON is written under
@@ -323,6 +338,7 @@ helix/
     helix-memory/     home layout + retrieval stub
     helix-reliquary/  named secret references + sealed store
     helix-cap/        shrink-only capability tokens
+    helix-switch/     sole egress allowlist (Switch)
   charter-packs/      hearthside, desk, workshop
   docs/               architecture and threat model
 ```

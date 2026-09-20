@@ -8,6 +8,12 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Switch egress gate (`helix-switch` crate): sole allowlist for outbound HTTP
+  used by Loom; Hands/adapters must not raw-dial
+- Hearthside allowlist = Ollama loopback only (`127.0.0.1` / `localhost` / `::1`)
+- Workshop/desk cloud flags do not open the internet until hosts are seeded
+- helixd routes `/api/tags` and `/api/generate` through Switch before dialing
+- `Status.switch` summary line; `helix status` surfaces it when present
 - Shrink-only capability tokens (`helix-cap` crate): HMAC-SHA256 tokens issued by
   helixd; attenuation may only remove rights (Biscuit-equivalent, no widen)
 - helixd: `POST /v1/tokens`, `/v1/tokens/attenuate`, `/v1/tokens/verify`

@@ -7,6 +7,8 @@ model is frozen. Authority is issued, never assumed.
 
 - **helixd** — privileged daemon on loopback. Owns home layout, charter, chronicle, Loom calls, and capability token MAC key.
 - **helix** — CLI. Talks only to `helixd`.
+- **Switch** — sole egress gate inside helixd (and later Hands). Allowlist is
+  derived from the active charter; Loom cannot raw-dial.
 - **Hands** (later) — Wasmtime components with deny-by-default WASI.
 - **Adapters** (later) — native processes for mail, browser, OS APIs.
 - **Desktop** (later) — Tauri app for Ask banners, Reliquary, Plot, Chronicle.
@@ -33,6 +35,17 @@ Rights are drawn from the active charter and may only be reduced by attenuation.
 The daemon holds an ephemeral session key; tokens do not survive restart.
 This is the product equivalent of Biscuit attenuation without the full biscuit-auth stack on the default path.
 
+## Switch (egress)
+
+`helix-switch` classifies every outbound URL before Loom (or a future adapter)
+may dial:
+
+- **hearthside**: loopback hosts only (`127.0.0.1`, `localhost`, `::1`) for the
+  local model runtime.
+- **desk / workshop**: same loopback rule; remote hosts remain empty until an
+  explicit allow entry is added for a connector or cloud Loom. Charter flags
+  alone do not open the internet.
+
 ## Learning
 
 No LoRA. Everyday improvement is retrieval of playbooks, tool notes, and
@@ -45,6 +58,6 @@ propose/execute/select) is optional and not on the default path.
 2. Reliquary catalog + secrets CLI (shipped; keychain unwrap still stub)
 3. Ask protocol: pending grants + `helix grant` + `writes_require_ask` (shipped)
 4. Capability tokens: issue / attenuate / verify (shipped)
-5. Switch egress proxy
+5. Switch egress proxy (shipped)
 6. Wasm Hands + first adapter
 7. Browser pane with human take-over
