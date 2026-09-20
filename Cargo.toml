@@ -6,6 +6,7 @@ members = [
     "crates/helix-memory",
     "crates/helix-reliquary",
     "crates/helix-cap",
+    "crates/helix-switch",
     "crates/helixd",
     "crates/helix-cli",
 ]
@@ -25,6 +26,7 @@ helix-charter = { path = "crates/helix-charter" }
 helix-memory = { path = "crates/helix-memory" }
 helix-reliquary = { path = "crates/helix-reliquary" }
 helix-cap = { path = "crates/helix-cap" }
+helix-switch = { path = "crates/helix-switch" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"

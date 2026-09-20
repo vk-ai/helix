@@ -14,6 +14,9 @@ pub struct Status {
     pub ollama: String,
     pub ollama_reachable: bool,
     pub version: String,
+    /// Switch egress summary (allowlist derived from charter).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub switch: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
