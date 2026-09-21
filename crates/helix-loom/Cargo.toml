@@ -1,0 +1,20 @@
+[package]
+name = "helix-loom"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Helix Loom provider interface — Ollama + optional OpenAI-compat behind Switch"
+
+[dependencies]
+helix-charter.workspace = true
+helix-switch.workspace = true
+helix-reliquary.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+thiserror.workspace = true
+url = "2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
