@@ -17,6 +17,9 @@ pub struct Status {
     /// Switch egress summary (allowlist derived from charter).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub switch: Option<String>,
+    /// Loom provider summary (ollama or openai-compat; no secrets).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loom: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
