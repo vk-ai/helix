@@ -17,8 +17,9 @@ use helix_protocol::{
     Status, VerifyTokenRequest, VerifyTokenResponse, WritePermission, DEFAULT_BIND, DEFAULT_MODEL,
     DEFAULT_OLLAMA,
 };
+use helix_loom::{self, LoomConfig};
+use helix_reliquary::Reliquary;
 use helix_switch::Switch;
-use serde::Deserialize;
 use serde_json::json;
 
 struct App {
@@ -138,7 +139,7 @@ async fn ask(
         Ok(text) => (text, true),
         Err(err) => (
             format!(
-                "Charter ({pack_name}): {}\n\nMemory:\n{memory}\nOllama was not used ({err}).",
+                "Charter ({pack_name}): {}\n\nMemory:\n{memory}\nLoom was not used ({err}).",
                 charter.summary
             ),
             false,
@@ -488,24 +489,10 @@ pub fn check_write_permission(app: &App, action: &str) -> WritePermission {
 }
 
 async fn ollama_ok(app: &App, switch: &Switch) -> bool {
-    let url = format!("{}/api/tags", app.ollama);
-    if switch.check(&url).is_err() {
-        return false;
-    }
-    reqwest::Client::new()
-        .get(&url)
-        .send()
-        .await
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
+    helix_loom::ollama_reachable(switch, &app.ollama).await
 }
 
-#[derive(Deserialize)]
-struct OllamaResponse {
-    response: Option<String>,
-}
-
-/// Loom completion path — must pass Switch before any network I/O.
+/// Loom completion path — providers live in `helix-loom`; Switch + Reliquary enforced there.
 async fn loom_complete(
     app: &App,
     charter: &Charter,
@@ -513,38 +500,19 @@ async fn loom_complete(
     memory: &str,
     user: &str,
 ) -> anyhow::Result<String> {
-    if !charter.allow_local_model {
-        anyhow::bail!("local model not allowed by charter");
-    }
-    let generate_url = format!("{}/api/generate", app.ollama);
-    switch
-        .check(&generate_url)
-        .map_err(|e| anyhow::anyhow!("switch denied egress: {e}"))?;
-
-    let prompt = format!(
-        "You are Helix, a local personal agent.\n\
-         You have no tools and no secrets in this slice.\n\
-         Charter pack: {}\n{}\n\n\
-         Retrieved memory:\n{}\n\n\
-         User:\n{}\n\n\
-         Reply helpfully. Do not invent capabilities you do not have.\n",
-        charter.pack, charter.summary, memory, user
-    );
-    let body = json!({
-        "model": app.model,
-        "prompt": prompt,
-        "stream": false,
-    });
-    let res = reqwest::Client::new()
-        .post(&generate_url)
-        .json(&body)
-        .send()
-        .await?
-        .error_for_status()?;
-    let parsed: OllamaResponse = res.json().await?;
-    Ok(parsed
-        .response
-        .unwrap_or_else(|| "(empty model response)".into()))
+    let config = LoomConfig::from_env(&app.model, &app.ollama);
+    let prompt = helix_loom::build_ask_prompt(charter, memory, user);
+    let reliquary = Reliquary::open(app.home.clone()).ok();
+    let out = helix_loom::complete(
+        charter,
+        switch,
+        &config,
+        reliquary.as_ref(),
+        &prompt,
+    )
+    .await
+    .map_err(|e| anyhow::anyhow!("{e}"))?;
+    Ok(out.text)
 }
 
 #[cfg(test)]

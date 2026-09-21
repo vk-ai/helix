@@ -8,6 +8,11 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Loom provider interface (`helix-loom` crate): Ollama + optional OpenAI-compat
+  behind Switch; API key from Reliquary reference only (never in model context)
+- `HELIX_LOOM`, `HELIX_OPENAI_BASE`, `HELIX_OPENAI_KEY_REF` select cloud path;
+  cloud blocked on hearthside (`allow_cloud_model` + Switch allowlist)
+- helixd ask path routes all model calls through `helix_loom::complete`
 - Switch egress gate (`helix-switch` crate): sole allowlist for outbound HTTP
   used by Loom; Hands/adapters must not raw-dial
 - Hearthside allowlist = Ollama loopback only (`127.0.0.1` / `localhost` / `::1`)

@@ -1,176 +1,159 @@
-//! Loom: model completion providers for Helix.
+//! Loom: model provider interface for Helix.
 //!
-//! All outbound HTTP goes through [`helix_switch::Switch`]. Secrets are unwrapped
-//! from Reliquary only at the adapter boundary and never enter model context.
+//! All outbound HTTP goes through [`Switch`]. Secret values are unwrapped from
+//! Reliquary only at the provider boundary and never returned to callers in a
+//! form that would enter model context as a credential.
 //!
 //! Providers:
-//! - **Ollama** (default): local `/api/generate` on loopback.
-//! - **OpenAI-compat**: `/v1/chat/completions` with a Reliquary API-key reference.
-//!   Cloud is blocked when the charter has `allow_cloud_model = false` (hearthside).
+//! - **Ollama** — local loopback runtime (default on every pack that allows local model).
+//! - **OpenAI-compat** — optional chat-completions endpoint; requires charter
+//!   `allow_cloud_model`, Switch allowlist entry, and a Reliquary API-key reference.
+//!   Blocked on hearthside (and any pack without cloud + seeded host).
 
 use helix_charter::Charter;
 use helix_reliquary::Reliquary;
-use helix_switch::{DestClass, Switch};
+use helix_switch::{Switch, SwitchError};
 use serde::Deserialize;
 use serde_json::json;
 use thiserror::Error;
-use url::Url;
 
-#[derive(Debug, Error)]
-pub enum LoomError {
-    #[error("switch denied egress: {0}")]
-    Switch(String),
-    #[error("cloud model not allowed by charter pack {0}")]
-    CloudBlocked(String),
-    #[error("local model not allowed by charter")]
-    LocalBlocked,
-    #[error("openai provider requires HELIX_OPENAI_KEY_REF (reliquary secret name)")]
-    MissingKeyRef,
-    #[error("reliquary: {0}")]
-    Reliquary(String),
-    #[error("invalid provider base url: {0}")]
-    BadUrl(String),
-    #[error("http: {0}")]
-    Http(String),
-    #[error("empty model response")]
-    EmptyResponse,
-    #[error("unknown loom provider: {0} (use ollama or openai)")]
-    UnknownProvider(String),
-}
-
-/// Which backend Loom will dial.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// How Loom was selected for this completion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderKind {
     Ollama,
     OpenAiCompat,
 }
 
-impl ProviderKind {
-    pub fn parse(s: &str) -> Result<Self, LoomError> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "ollama" | "" => Ok(Self::Ollama),
-            "openai" | "openai-compat" | "openai_compat" => Ok(Self::OpenAiCompat),
-            other => Err(LoomError::UnknownProvider(other.into())),
-        }
-    }
+#[derive(Debug, Error)]
+pub enum LoomError {
+    #[error("local model not allowed by charter")]
+    LocalModelDenied,
+    #[error("cloud model not allowed by charter")]
+    CloudModelDenied,
+    #[error("switch denied egress: {0}")]
+    Switch(#[from] SwitchError),
+    #[error("missing Reliquary API key reference (set HELIX_OPENAI_KEY_REF and helix secrets add …)")]
+    MissingKeyRef,
+    #[error("reliquary: {0}")]
+    Reliquary(String),
+    #[error("http: {0}")]
+    Http(String),
+    #[error("empty model response")]
+    EmptyResponse,
+    #[error("no loom provider configured")]
+    NoProvider,
 }
 
-/// Resolved Loom configuration from environment + defaults.
+/// Configuration for Loom (env + defaults). Values only; no secrets.
 #[derive(Debug, Clone)]
 pub struct LoomConfig {
-    pub kind: ProviderKind,
-    /// Ollama base, e.g. http://127.0.0.1:11434
+    pub model: String,
     pub ollama_base: String,
-    pub ollama_model: String,
-    /// OpenAI-compatible base, e.g. https://api.openai.com
-    pub openai_base: String,
-    pub openai_model: String,
-    /// Reliquary secret *name* holding the API key (never the value).
+    /// Optional OpenAI-compatible base URL (e.g. `https://api.openai.com/v1`).
+    pub openai_base: Option<String>,
+    /// Reliquary secret *name* for the API key (never the value).
     pub openai_key_ref: Option<String>,
+    /// Force provider: `ollama` | `openai` | auto.
+    pub prefer: PreferProvider,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreferProvider {
+    Auto,
+    Ollama,
+    OpenAi,
 }
 
 impl LoomConfig {
-    /// Load from environment variables.
-    pub fn from_env() -> Result<Self, LoomError> {
-        let kind = ProviderKind::parse(
-            &std::env::var("HELIX_LOOM").unwrap_or_else(|_| "ollama".into()),
-        )?;
-        Ok(Self {
-            kind,
-            ollama_base: std::env::var("HELIX_OLLAMA")
-                .unwrap_or_else(|_| "http://127.0.0.1:11434".into()),
-            ollama_model: std::env::var("HELIX_MODEL").unwrap_or_else(|_| "llama3.2".into()),
-            openai_base: std::env::var("HELIX_OPENAI_BASE")
-                .unwrap_or_else(|_| "https://api.openai.com".into()),
-            openai_model: std::env::var("HELIX_OPENAI_MODEL")
-                .unwrap_or_else(|_| "gpt-4o-mini".into()),
-            openai_key_ref: std::env::var("HELIX_OPENAI_KEY_REF").ok().filter(|s| !s.is_empty()),
-        })
-    }
-
-    /// Short label for status / logs (never includes secrets).
-    pub fn summary(&self) -> String {
-        match self.kind {
-            ProviderKind::Ollama => {
-                format!("provider=ollama model={} base={}", self.ollama_model, self.ollama_base)
-            }
-            ProviderKind::OpenAiCompat => {
-                let key = self
-                    .openai_key_ref
-                    .as_deref()
-                    .unwrap_or("(unset)");
-                format!(
-                    "provider=openai-compat model={} base={} key_ref={}",
-                    self.openai_model, self.openai_base, key
-                )
-            }
+    /// Build from environment variables used by helixd.
+    pub fn from_env(model: &str, ollama_base: &str) -> Self {
+        let openai_base = std::env::var("HELIX_OPENAI_BASE")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let openai_key_ref = std::env::var("HELIX_OPENAI_KEY_REF")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let prefer = match std::env::var("HELIX_LOOM")
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "openai" | "openai-compat" | "cloud" => PreferProvider::OpenAi,
+            "ollama" | "local" => PreferProvider::Ollama,
+            _ => PreferProvider::Auto,
+        };
+        Self {
+            model: model.to_string(),
+            ollama_base: ollama_base.trim_end_matches('/').to_string(),
+            openai_base,
+            openai_key_ref,
+            prefer,
         }
     }
 }
 
-/// Complete a prompt via the configured provider. All dials pass Switch.
+/// Completion request shared by providers.
+#[derive(Debug, Clone)]
+pub struct CompleteRequest<'a> {
+    pub system_and_user_prompt: &'a str,
+    pub model: &'a str,
+}
+
+/// Result of a Loom completion.
+#[derive(Debug, Clone)]
+pub struct CompleteResponse {
+    pub text: String,
+    pub provider: ProviderKind,
+}
+
+/// Run a completion through the selected provider.
+///
+/// Selection rules:
+/// 1. If `prefer` is Ollama (or Auto without cloud config) → Ollama, when
+///    `charter.allow_local_model`.
+/// 2. If `prefer` is OpenAi, or Auto with `openai_base` + key ref and charter
+///    allows cloud → OpenAI-compat (Switch must allow the host).
+/// 3. Hearthside never opens cloud: `allow_cloud_model` is false.
 pub async fn complete(
-    config: &LoomConfig,
     charter: &Charter,
     switch: &Switch,
+    config: &LoomConfig,
     reliquary: Option<&Reliquary>,
-    system_and_user: &str,
-) -> Result<String, LoomError> {
-    match config.kind {
-        ProviderKind::Ollama => {
-            ollama_complete(config, charter, switch, system_and_user).await
+    prompt: &str,
+) -> Result<CompleteResponse, LoomError> {
+    let use_openai = match config.prefer {
+        PreferProvider::OpenAi => true,
+        PreferProvider::Ollama => false,
+        PreferProvider::Auto => {
+            config.openai_base.is_some()
+                && config.openai_key_ref.is_some()
+                && charter.allow_cloud_model
         }
-        ProviderKind::OpenAiCompat => {
-            openai_complete(config, charter, switch, reliquary, system_and_user).await
-        }
+    };
+
+    if use_openai {
+        complete_openai(charter, switch, config, reliquary, prompt).await
+    } else {
+        complete_ollama(charter, switch, config, prompt).await
     }
 }
 
-/// Probe whether the active provider endpoint is reachable (Switch + HTTP).
-pub async fn reachable(config: &LoomConfig, switch: &Switch) -> bool {
-    match config.kind {
-        ProviderKind::Ollama => {
-            let url = format!("{}/api/tags", config.ollama_base.trim_end_matches('/'));
-            if switch.check(&url).is_err() {
-                return false;
-            }
-            reqwest::Client::new()
-                .get(&url)
-                .send()
-                .await
-                .map(|r| r.status().is_success())
-                .unwrap_or(false)
-        }
-        ProviderKind::OpenAiCompat => {
-            let base = config.openai_base.trim_end_matches('/');
-            let url = format!("{base}/v1/models");
-            match switch.classify(&url) {
-                Ok(DestClass::AllowedRemote) | Ok(DestClass::LocalModel) => true,
-                _ => false,
-            }
-        }
-    }
-}
-
-async fn ollama_complete(
-    config: &LoomConfig,
+async fn complete_ollama(
     charter: &Charter,
     switch: &Switch,
+    config: &LoomConfig,
     prompt: &str,
-) -> Result<String, LoomError> {
+) -> Result<CompleteResponse, LoomError> {
     if !charter.allow_local_model {
-        return Err(LoomError::LocalBlocked);
+        return Err(LoomError::LocalModelDenied);
     }
-    let generate_url = format!(
-        "{}/api/generate",
-        config.ollama_base.trim_end_matches('/')
-    );
-    switch
-        .check(&generate_url)
-        .map_err(|e| LoomError::Switch(e.to_string()))?;
+    let generate_url = format!("{}/api/generate", config.ollama_base);
+    switch.check(&generate_url)?;
 
     let body = json!({
-        "model": config.ollama_model,
+        "model": config.model,
         "prompt": prompt,
         "stream": false,
     });
@@ -182,72 +165,62 @@ async fn ollama_complete(
         .map_err(|e| LoomError::Http(e.to_string()))?
         .error_for_status()
         .map_err(|e| LoomError::Http(e.to_string()))?;
+
+    #[derive(Deserialize)]
+    struct OllamaResponse {
+        response: Option<String>,
+    }
     let parsed: OllamaResponse = res
         .json()
         .await
         .map_err(|e| LoomError::Http(e.to_string()))?;
-    parsed
+    let text = parsed
         .response
         .filter(|s| !s.is_empty())
-        .ok_or(LoomError::EmptyResponse)
+        .ok_or(LoomError::EmptyResponse)?;
+    Ok(CompleteResponse {
+        text,
+        provider: ProviderKind::Ollama,
+    })
 }
 
-async fn openai_complete(
-    config: &LoomConfig,
+async fn complete_openai(
     charter: &Charter,
     switch: &Switch,
+    config: &LoomConfig,
     reliquary: Option<&Reliquary>,
     prompt: &str,
-) -> Result<String, LoomError> {
-    let base = config.openai_base.trim_end_matches('/');
-    let url = format!("{base}/v1/chat/completions");
-
-    let parsed = Url::parse(&url).map_err(|e| LoomError::BadUrl(e.to_string()))?;
-    let host = parsed
-        .host_str()
-        .ok_or_else(|| LoomError::BadUrl("no host".into()))?
-        .to_ascii_lowercase();
-    let is_loopback = matches!(host.as_str(), "127.0.0.1" | "localhost" | "::1" | "[::1]")
-        || host.starts_with("127.");
-
-    if is_loopback {
-        if !charter.allow_local_model {
-            return Err(LoomError::LocalBlocked);
-        }
-    } else {
-        if !charter.allow_cloud_model {
-            return Err(LoomError::CloudBlocked(charter.pack.clone()));
-        }
+) -> Result<CompleteResponse, LoomError> {
+    if !charter.allow_cloud_model {
+        return Err(LoomError::CloudModelDenied);
     }
-
-    match switch.classify(&url) {
-        Ok(DestClass::LocalModel) | Ok(DestClass::AllowedRemote) => {}
-        Ok(DestClass::Blocked) => {
-            if charter.allow_cloud_model && !is_loopback {
-                // Configured openai base is dialable under allow_cloud_model.
-            } else {
-                return Err(LoomError::Switch(format!(
-                    "host not on allowlist for pack {} (url={url})",
-                    charter.pack
-                )));
-            }
-        }
-        Err(e) => return Err(LoomError::Switch(e.to_string())),
-    }
-
+    let base = config
+        .openai_base
+        .as_deref()
+        .ok_or(LoomError::NoProvider)?
+        .trim_end_matches('/');
     let key_ref = config
         .openai_key_ref
         .as_deref()
         .ok_or(LoomError::MissingKeyRef)?;
-    let rel = reliquary.ok_or_else(|| {
-        LoomError::Reliquary("reliquary not available for API key unwrap".into())
-    })?;
-    let api_key = rel
-        .unwrap(key_ref)
-        .map_err(|e| LoomError::Reliquary(e.to_string()))?;
+
+    let url = format!("{base}/chat/completions");
+    switch.check(&url)?;
+
+    let api_key = match reliquary {
+        Some(r) => r
+            .unwrap(key_ref)
+            .map_err(|e| LoomError::Reliquary(e.to_string()))?,
+        None => {
+            return Err(LoomError::Reliquary(
+                "reliquary not available for API key unwrap".into(),
+            ))
+        }
+    };
+    // api_key lives only in this stack frame; not logged, not returned.
 
     let body = json!({
-        "model": config.openai_model,
+        "model": config.model,
         "messages": [
             {"role": "user", "content": prompt}
         ],
@@ -265,39 +238,62 @@ async fn openai_complete(
         .error_for_status()
         .map_err(|e| LoomError::Http(e.to_string()))?;
 
-    let parsed: OpenAiResponse = res
+    #[derive(Deserialize)]
+    struct ChatMessage {
+        content: Option<String>,
+    }
+    #[derive(Deserialize)]
+    struct ChatChoice {
+        message: Option<ChatMessage>,
+    }
+    #[derive(Deserialize)]
+    struct ChatResponse {
+        choices: Option<Vec<ChatChoice>>,
+    }
+
+    let parsed: ChatResponse = res
         .json()
         .await
         .map_err(|e| LoomError::Http(e.to_string()))?;
     let text = parsed
         .choices
-        .into_iter()
-        .next()
+        .and_then(|c| c.into_iter().next())
         .and_then(|c| c.message)
         .and_then(|m| m.content)
         .filter(|s| !s.is_empty())
         .ok_or(LoomError::EmptyResponse)?;
-    Ok(text)
+
+    Ok(CompleteResponse {
+        text,
+        provider: ProviderKind::OpenAiCompat,
+    })
 }
 
-#[derive(Deserialize)]
-struct OllamaResponse {
-    response: Option<String>,
+/// Probe whether the local Ollama base is reachable (after Switch check).
+pub async fn ollama_reachable(switch: &Switch, ollama_base: &str) -> bool {
+    let url = format!("{}/api/tags", ollama_base.trim_end_matches('/'));
+    if switch.check(&url).is_err() {
+        return false;
+    }
+    reqwest::Client::new()
+        .get(&url)
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false)
 }
 
-#[derive(Deserialize)]
-struct OpenAiResponse {
-    choices: Vec<OpenAiChoice>,
-}
-
-#[derive(Deserialize)]
-struct OpenAiChoice {
-    message: Option<OpenAiMessage>,
-}
-
-#[derive(Deserialize)]
-struct OpenAiMessage {
-    content: Option<String>,
+/// Build the constrained Helix system prompt used by ask.
+pub fn build_ask_prompt(charter: &Charter, memory: &str, user: &str) -> String {
+    format!(
+        "You are Helix, a local personal agent.\n\
+         You have no tools and no secrets in this slice.\n\
+         Charter pack: {}\n{}\n\n\
+         Retrieved memory:\n{}\n\n\
+         User:\n{}\n\n\
+         Reply helpfully. Do not invent capabilities you do not have.\n",
+        charter.pack, charter.summary, memory, user
+    )
 }
 
 #[cfg(test)]
@@ -306,57 +302,45 @@ mod tests {
     use helix_switch::Switch;
 
     #[test]
-    fn parse_provider() {
-        assert_eq!(ProviderKind::parse("ollama").unwrap(), ProviderKind::Ollama);
-        assert_eq!(
-            ProviderKind::parse("openai").unwrap(),
-            ProviderKind::OpenAiCompat
-        );
-        assert!(ProviderKind::parse("foo").is_err());
-    }
-
-    #[test]
-    fn config_summary_has_no_secret() {
-        let c = LoomConfig {
-            kind: ProviderKind::OpenAiCompat,
-            ollama_base: "http://127.0.0.1:11434".into(),
-            ollama_model: "llama3.2".into(),
-            openai_base: "https://api.openai.com".into(),
-            openai_model: "gpt-4o-mini".into(),
-            openai_key_ref: Some("openai-key".into()),
-        };
-        let s = c.summary();
-        assert!(s.contains("key_ref=openai-key"));
-        assert!(!s.contains("sk-"));
-    }
-
-    #[test]
-    fn hearthside_blocks_cloud_openai() {
+    fn hearthside_rejects_openai_path() {
         let charter = Charter::builtin("hearthside").unwrap();
-        assert!(!charter.allow_cloud_model);
-        let config = LoomConfig {
-            kind: ProviderKind::OpenAiCompat,
-            ollama_base: "http://127.0.0.1:11434".into(),
-            ollama_model: "llama3.2".into(),
-            openai_base: "https://api.openai.com".into(),
-            openai_model: "gpt-4o-mini".into(),
-            openai_key_ref: Some("openai-key".into()),
-        };
         let switch = Switch::from_charter(&charter);
-        let url = format!(
-            "{}/v1/chat/completions",
-            config.openai_base.trim_end_matches('/')
-        );
-        assert_eq!(
-            switch.classify(&url).unwrap(),
-            DestClass::Blocked
-        );
+        let config = LoomConfig {
+            model: "gpt-4o-mini".into(),
+            ollama_base: "http://127.0.0.1:11434".into(),
+            openai_base: Some("https://api.openai.com/v1".into()),
+            openai_key_ref: Some("openai-key".into()),
+            prefer: PreferProvider::OpenAi,
+        };
+        // Sync check of policy only — we don't run the async body in this unit test.
         assert!(!charter.allow_cloud_model);
+        assert!(matches!(
+            switch.check("https://api.openai.com/v1/chat/completions"),
+            Err(_)
+        ));
+        let _ = (charter, switch, config);
     }
 
     #[test]
-    fn workshop_allows_cloud_flag() {
-        let charter = Charter::builtin("workshop").unwrap();
-        assert!(charter.allow_cloud_model);
+    fn ollama_url_passes_hearthside_switch() {
+        let switch = Switch::for_pack("hearthside").unwrap();
+        assert!(switch
+            .check("http://127.0.0.1:11434/api/generate")
+            .is_ok());
+    }
+
+    #[test]
+    fn config_from_env_defaults() {
+        let c = LoomConfig::from_env("llama3.2", "http://127.0.0.1:11434/");
+        assert_eq!(c.ollama_base, "http://127.0.0.1:11434");
+        assert_eq!(c.prefer, PreferProvider::Auto);
+    }
+
+    #[test]
+    fn build_prompt_includes_charter() {
+        let c = Charter::builtin("hearthside").unwrap();
+        let p = build_ask_prompt(&c, "(none)", "hello");
+        assert!(p.contains("hearthside"));
+        assert!(p.contains("hello"));
     }
 }

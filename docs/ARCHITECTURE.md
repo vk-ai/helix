@@ -46,6 +46,19 @@ may dial:
   explicit allow entry is added for a connector or cloud Loom. Charter flags
   alone do not open the internet.
 
+## Loom
+
+`helix-loom` is the sole model provider interface. Completions always pass
+Switch before dialing. Providers:
+
+- **Ollama** (default) — loopback `/api/generate` when `allow_local_model`.
+- **OpenAI-compat** — optional `/chat/completions`; requires `allow_cloud_model`,
+  a Switch-allowed host (`HELIX_OPENAI_BASE`), and a Reliquary secret name
+  (`HELIX_OPENAI_KEY_REF`). The API key is unwrapped only inside the provider
+  and never enters the prompt. Hearthside keeps cloud blocked.
+
+Env: `HELIX_LOOM=ollama|openai|auto`, `HELIX_OPENAI_BASE`, `HELIX_OPENAI_KEY_REF`.
+
 ## Learning
 
 No LoRA. Everyday improvement is retrieval of playbooks, tool notes, and
@@ -59,5 +72,6 @@ propose/execute/select) is optional and not on the default path.
 3. Ask protocol: pending grants + `helix grant` + `writes_require_ask` (shipped)
 4. Capability tokens: issue / attenuate / verify (shipped)
 5. Switch egress proxy (shipped)
-6. Wasm Hands + first adapter
-7. Browser pane with human take-over
+6. Loom provider interface: Ollama + optional OpenAI-compat (shipped)
+7. Wasm Hands + first adapter
+8. Browser pane with human take-over
