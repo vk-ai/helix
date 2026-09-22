@@ -9,7 +9,8 @@ model is frozen. Authority is issued, never assumed.
 - **helix** — CLI. Talks only to `helixd`.
 - **Switch** — sole egress gate inside helixd (and later Hands). Allowlist is
   derived from the active charter; Loom cannot raw-dial.
-- **Hands** (later) — Wasmtime components with deny-by-default WASI.
+- **Hands** — Wasmtime host (`helix-hands`) with deny-by-default WASI; only the
+  active plot is preopened (guest `/plot`). CLI: `helix hands run`.
 - **Adapters** (later) — native processes for mail, browser, OS APIs.
 - **Desktop** (later) — Tauri app for Ask banners, Reliquary, Plot, Chronicle.
 
@@ -59,6 +60,18 @@ Switch before dialing. Providers:
 
 Env: `HELIX_LOOM=ollama|openai|auto`, `HELIX_OPENAI_BASE`, `HELIX_OPENAI_KEY_REF`.
 
+## Hands (Wasm host)
+
+`helix-hands` runs core WASI preview1 modules under Wasmtime. By default the
+guest sees:
+
+- **FS**: only the active plot directory, preopened at `/plot` (read + write).
+- **No network**, no ambient environment variables, no host `$HOME`.
+
+Optional fuel limits instruction count. Future Atlas pins and plot-scoped
+file tools will load through this host; adapters must still go through Switch
+for any egress.
+
 ## Learning
 
 No LoRA. Everyday improvement is retrieval of playbooks, tool notes, and
@@ -73,5 +86,6 @@ propose/execute/select) is optional and not on the default path.
 4. Capability tokens: issue / attenuate / verify (shipped)
 5. Switch egress proxy (shipped)
 6. Loom provider interface: Ollama + optional OpenAI-compat (shipped)
-7. Wasm Hands + first adapter
-8. Browser pane with human take-over
+7. Wasm Hands host: Wasmtime + plot-scoped FS (shipped)
+8. Atlas pins + first plot-scoped file adapter through Hands
+9. Browser pane with human take-over
