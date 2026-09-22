@@ -1,0 +1,17 @@
+[package]
+name = "helix-hands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Helix Wasm Hands host — Wasmtime + plot-scoped FS; deny-by-default WASI"
+
+[dependencies]
+thiserror.workspace = true
+anyhow.workspace = true
+# Wasmtime + WASI preview1. Network, env, and ambient FS are denied unless
+# explicitly preopened (only the active plot directory).
+wasmtime = { version = "28", default-features = false, features = ["cranelift", "runtime", "std"] }
+wasmtime-wasi = { version = "28", default-features = false, features = ["preview1"] }
+
+[dev-dependencies]
+tempfile = "3"
