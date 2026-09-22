@@ -8,6 +8,11 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Wasm Hands host (`helix-hands` crate): Wasmtime + WASI preview1 with
+  deny-by-default policy — no network, no ambient env, single preopened FS
+  root: the active plot at guest `/plot`
+- CLI: `helix hands run <module.wasm> [--plot NAME] [--fuel N] [-- args…]`
+- Library API: `helix_hands::run_module` + `HandsConfig::for_plot`
 - Loom provider interface (`helix-loom` crate): Ollama + optional OpenAI-compat
   behind Switch; API key from Reliquary reference only (never in model context)
 - `HELIX_LOOM`, `HELIX_OPENAI_BASE`, `HELIX_OPENAI_KEY_REF` select cloud path;
