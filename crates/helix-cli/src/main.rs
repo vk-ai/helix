@@ -50,6 +50,11 @@ enum Commands {
         #[command(subcommand)]
         action: TokenCmd,
     },
+    /// Run a Wasm module under Hands (plot-scoped WASI, deny-by-default)
+    Hands {
+        #[command(subcommand)]
+        action: HandsCmd,
+    },
     /// Send a message through the local daemon
     Ask {
         text: String,
@@ -132,7 +137,7 @@ enum TokenCmd {
     /// Issue a root token capped by the active charter (JSON on stdout)
     Issue {
         /// Restrict to these rights (comma-separated). Default: full charter set.
-        #[arg(long, value_delimiter = ',')] 
+        #[arg(long, value_delimiter = ',')]
         rights: Vec<String>,
         /// Optional TTL in seconds
         #[arg(long)]
@@ -160,6 +165,24 @@ enum TokenCmd {
     Show {
         /// Token JSON (or @file / -)
         token: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum HandsCmd {
+    /// Execute a WASI preview1 Wasm module with only the active plot preopened
+    Run {
+        /// Path to a .wasm file (core module with optional `_start`)
+        wasm: String,
+        /// Optional guest argv after the program name
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+        /// Optional fuel (instruction budget); omit for unlimited
+        #[arg(long)]
+        fuel: Option<u64>,
+        /// Plot id under ~/Helix/plots (default: default)
+        #[arg(long, default_value = "default")]
+        plot: String,
     },
 }
 
@@ -463,6 +486,39 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+        Commands::Hands { action } => match action {
+            HandsCmd::Run {
+                wasm,
+                args,
+                fuel,
+                plot,
+            } => {
+                let home = HelixHome::resolve()?;
+                home.init(&home.read_pack().unwrap_or_else(|_| DEFAULT_PACK.into()))?;
+                let plot_dir = home.root.join("plots").join(&plot);
+                if !plot_dir.is_dir() {
+                    anyhow::bail!(
+                        "plot directory not found: {} (run `helix init` or create plots/{plot})",
+                        plot_dir.display()
+                    );
+                }
+                let bytes = std::fs::read(&wasm)
+                    .map_err(|e| anyhow::anyhow!("read wasm {}: {e}", wasm))?;
+                let mut guest_args = vec![wasm.clone()];
+                guest_args.extend(args);
+                let mut cfg = helix_hands::HandsConfig::for_plot(&plot_dir)
+                    .with_args(guest_args)
+                    .with_inherit_stdio(true);
+                if let Some(f) = fuel {
+                    cfg = cfg.with_fuel(f);
+                }
+                let result = helix_hands::run_module(&bytes, &cfg)
+                    .map_err(|e| anyhow::anyhow!("hands: {e}"))?;
+                if result.exit_code != 0 {
+                    std::process::exit(result.exit_code);
+                }
+            }
+        },
         Commands::Ask {
             text,
             accept,
@@ -495,14 +551,23 @@ async fn main() -> anyhow::Result<()> {
             } else if reject {
                 Some(Verdict::Reject)
             } else if let Some(ref edited) = edit {
-                Some(Verdict::Edit(edited.clone()))
+                Some(Verdict::Edit)
             } else {
                 None
             };
 
             if let Some(v) = verdict {
                 let home = HelixHome::resolve()?;
-                let path = new_episode(&home, &text, &body.reply, v)?;
+                let edited_reply = edit.clone();
+                let ep = new_episode(
+                    &text,
+                    &body.reply,
+                    edited_reply,
+                    v,
+                    &body.pack,
+                    body.model_used,
+                );
+                let path = home.write_episode(&ep)?;
                 println!("episode {}", path.display());
             }
         }
