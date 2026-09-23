@@ -10,8 +10,9 @@ can open, edit, and delete. The model never sees API keys or passwords.
 > optional OpenAI-compat behind Switch + Reliquary key ref), episode write
 > (`--accept` / `--edit` / `--reject`), preferences (`helix pref`),
 > Reliquary catalog (`helix secrets`), Ask protocol (`helix grant`),
-> shrink-only capability tokens (`helix token`), and Switch egress work today.
-> Wasm Hands and connectors are next.
+> shrink-only capability tokens (`helix token`), Switch egress, Loom, Wasm
+> Hands (`helix hands run`), and Atlas pins (`helix atlas`) work today.
+> Plot-scoped file adapters and connectors are next.
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
 [Install](#install) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
@@ -246,6 +247,21 @@ export HELIX_MODEL=gpt-4o-mini
 
 On hearthside, cloud is always blocked (`allow_cloud_model=false`).
 
+### 12. Atlas (digest-pinned tools)
+
+Tools are trusted by **content hash**, not path:
+
+```bash
+helix atlas pin my-tool ./path/to/tool.wasm
+helix atlas list
+helix atlas verify my-tool
+helix atlas unpin my-tool
+```
+
+`helix hands run` classifies the module first. Matching pins run trusted;
+unsigned or drifted tools are marked **UNTRUSTED** and receive a default fuel
+cap (50M instructions) unless you pass `--fuel`.
+
 ## Platform notes
 
 ### macOS
@@ -319,13 +335,16 @@ helix charter show
 - Switch egress: Loom checked against charter allowlist before any dial
 - Loom providers: Ollama (default) + optional OpenAI-compat (`HELIX_LOOM`,
   `HELIX_OPENAI_BASE`, `HELIX_OPENAI_KEY_REF` + Reliquary); cloud blocked on hearthside
+- Wasm Hands: `helix hands run <module.wasm>` (plot-scoped WASI, deny-by-default)
+- Atlas pins: `helix atlas list|pin|unpin|verify`; unpinned tools run untrusted
+  with a default fuel cap under Hands
 - Memory directories for episodes / playbooks / notes / prefs
 - Chronicle log file created
 
 **Not in this slice** (designed, not shipped)
 
 - Real OS-keychain unwrap (macOS / DPAPI / libsecret)
-- Wasm Hands / Wasmtime tools
+- Plot-scoped file adapter through Hands (first native tool surface)
 - Desktop app (Tauri)
 - Mail / calendar / browser adapters
 - Human take-over for CAPTCHA (browser pane)
@@ -343,7 +362,8 @@ accept or edit a result, an episode JSON is written under
 - Treat the model as untrusted. It must not gain filesystem or network power
   from a prompt.
 - Do not run unsigned tools as trusted. Atlas pins (digest, not tag) are the
-  planned trust root.
+  trust root: `helix atlas pin` records SHA-256; `hands run` marks mismatches
+  untrusted and caps fuel.
 - Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
 Read [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) before connecting any account.
@@ -364,6 +384,8 @@ helix/
     helix-cap/        shrink-only capability tokens
     helix-switch/     sole egress allowlist (Switch)
     helix-loom/       model providers (Ollama + OpenAI-compat)
+    helix-hands/      Wasmtime Hands host (plot-scoped WASI)
+    helix-atlas/      digest-pinned tool catalog
   charter-packs/      hearthside, desk, workshop
   docs/               architecture and threat model
 ```
