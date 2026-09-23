@@ -68,9 +68,16 @@ guest sees:
 - **FS**: only the active plot directory, preopened at `/plot` (read + write).
 - **No network**, no ambient environment variables, no host `$HOME`.
 
-Optional fuel limits instruction count. Future Atlas pins and plot-scoped
-file tools will load through this host; adapters must still go through Switch
-for any egress.
+Optional fuel limits instruction count. Atlas pins classify tools before run;
+plot-scoped file tools will load through this host. Adapters must still go
+through Switch for any egress.
+
+## Atlas
+
+`helix-atlas` stores SHA-256 pins in `atlas/pins.json`. Trust is the digest, not
+the path. `helix hands run` classifies each module: matching trusted pins run
+without an automatic fuel cap; unsigned or drifted tools are marked untrusted
+and receive a default instruction budget (`UNTRUSTED_FUEL_CAP`).
 
 ## Learning
 
@@ -87,5 +94,6 @@ propose/execute/select) is optional and not on the default path.
 5. Switch egress proxy (shipped)
 6. Loom provider interface: Ollama + optional OpenAI-compat (shipped)
 7. Wasm Hands host: Wasmtime + plot-scoped FS (shipped)
-8. Atlas pins + first plot-scoped file adapter through Hands
-9. Browser pane with human take-over
+8. Atlas pins: digest-pinned tools + untrusted fuel cap (shipped)
+9. First plot-scoped file adapter through Hands
+10. Browser pane with human take-over

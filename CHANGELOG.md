@@ -8,6 +8,11 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Atlas pins (`helix-atlas` crate): digest-pinned tools in `~/Helix/atlas/pins.json`
+- CLI: `helix atlas list|pin|unpin|verify` — pin by SHA-256 of file bytes
+- `helix hands run` classifies modules via Atlas: trusted pins run unrestricted;
+  unsigned / drifted tools are **UNTRUSTED** and get a default fuel cap
+  (`UNTRUSTED_FUEL_CAP` = 50_000_000 instructions) unless `--fuel` is set
 - Wasm Hands host (`helix-hands` crate): Wasmtime + WASI preview1 with
   deny-by-default policy — no network, no ambient env, single preopened FS
   root: the active plot at guest `/plot`
