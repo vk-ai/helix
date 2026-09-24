@@ -79,6 +79,14 @@ the path. `helix hands run` classifies each module: matching trusted pins run
 without an automatic fuel cap; unsigned or drifted tools are marked untrusted
 and receive a default instruction budget (`UNTRUSTED_FUEL_CAP`).
 
+## Plot commits
+
+`helix-memory` records content-addressed snapshots of a plot working tree under
+`plots/<id>/.helix/commits/<sha256>/`. The id is the SHA-256 of a sorted
+manifest (relative path + per-file digest); `.helix/` is excluded. CLI:
+`helix plot commit|list|rewind|status`. Rewind restores the tree and updates
+`HEAD`.
+
 ## Learning
 
 No LoRA. Everyday improvement is retrieval of playbooks, tool notes, and
@@ -95,5 +103,6 @@ propose/execute/select) is optional and not on the default path.
 6. Loom provider interface: Ollama + optional OpenAI-compat (shipped)
 7. Wasm Hands host: Wasmtime + plot-scoped FS (shipped)
 8. Atlas pins: digest-pinned tools + untrusted fuel cap (shipped)
-9. First plot-scoped file adapter through Hands
-10. Browser pane with human take-over
+9. Plot commits: content-addressed snapshot + rewind (shipped)
+10. First plot-scoped file adapter through Hands
+11. Browser pane with human take-over
