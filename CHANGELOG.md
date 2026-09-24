@@ -8,6 +8,12 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Plot commits: content-addressed snapshots under `plots/<id>/.helix/commits/<sha256>/`
+- CLI: `helix plot commit|list|rewind|status` — snapshot the plot tree, list
+  commits, restore working tree from a full id or unique prefix; HEAD recorded
+  under `.helix/HEAD`
+- Working-tree id is SHA-256 of a sorted manifest (path + per-file digest);
+  `.helix/` is excluded from the tree
 - Atlas pins (`helix-atlas` crate): digest-pinned tools in `~/Helix/atlas/pins.json`
 - CLI: `helix atlas list|pin|unpin|verify` — pin by SHA-256 of file bytes
 - `helix hands run` classifies modules via Atlas: trusted pins run unrestricted;
