@@ -6,6 +6,14 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Restored truncated `helix-memory` implementation (home layout, prefs, episodes,
+  keyword retrieval, playbook promotion, plot commits)
+- Restored empty `helix-cli` binary with documented subcommands (`init`, `status`,
+  `ask`, `charter`, `pref`, `secrets`, `grant`, `token`, `hands`, `atlas`, `plot`)
+- Enable `reqwest` blocking client in the CLI for daemon HTTP calls
+
 ### Added
 
 - Plot commits: content-addressed snapshots under `plots/<id>/.helix/commits/<sha256>/`
