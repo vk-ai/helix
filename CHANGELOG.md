@@ -8,6 +8,8 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Fixed
 
+- CI: restore missing `(` on `format!` in `helix-cap` and run `cargo fmt --all`
+  so `cargo fmt --check` and subsequent jobs pass
 - Restored truncated `helix-memory` implementation (home layout, prefs, episodes,
   keyword retrieval, playbook promotion, plot commits)
 - Restored empty `helix-cli` binary with documented subcommands (`init`, `status`,
