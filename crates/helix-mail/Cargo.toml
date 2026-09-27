@@ -1,0 +1,19 @@
+[package]
+name = "helix-mail"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Helix mail adapter: local mailbox, Reliquary OAuth refs, Ask-gated send"
+
+[dependencies]
+helix-memory.workspace = true
+helix-charter.workspace = true
+helix-reliquary.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+regex = "1"
+
+[dev-dependencies]
+tempfile = "3"

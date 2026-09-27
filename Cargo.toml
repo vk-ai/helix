@@ -10,6 +10,7 @@ members = [
     "crates/helix-loom",
     "crates/helix-hands",
     "crates/helix-atlas",
+    "crates/helix-mail",
     "crates/helixd",
     "crates/helix-cli",
 ]
@@ -33,6 +34,7 @@ helix-switch = { path = "crates/helix-switch" }
 helix-loom = { path = "crates/helix-loom" }
 helix-hands = { path = "crates/helix-hands" }
 helix-atlas = { path = "crates/helix-atlas" }
+helix-mail = { path = "crates/helix-mail" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
