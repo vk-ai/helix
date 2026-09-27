@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 use wasmtime::{Engine, Linker, Module, Store};
-use wasmtime_wasi::p1::{self, WasiP1Ctx};
+use wasmtime_wasi::preview1::{self, WasiP1Ctx};
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx};
 
 /// Errors from loading or running a Hands module.
@@ -43,13 +43,11 @@ pub struct HandsConfig {
     pub args: Vec<String>,
     /// Optional fuel limit (instruction budget). `None` = unlimited.
     pub fuel: Option<u64>,
-    /// When true, inherit host stdout/stderr (CLI mode). Default false for
-    /// library use so callers can capture via chronicle later.
+    /// When true, inherit host stdout/stderr (CLI mode).
     pub inherit_stdio: bool,
 }
 
 impl HandsConfig {
-    /// Plot-scoped config with a default program name and no inherited stdio.
     pub fn for_plot(plot_dir: impl Into<PathBuf>) -> Self {
         Self {
             plot_dir: plot_dir.into(),
@@ -75,17 +73,13 @@ impl HandsConfig {
     }
 }
 
-/// Outcome of a module run (exit status only; stdio may be inherited).
+/// Outcome of a module run.
 #[derive(Debug, Clone)]
 pub struct HandsResult {
-    /// WASI exit status if the module called `proc_exit`; otherwise 0.
     pub exit_code: i32,
 }
 
 /// Run a core Wasm module (WASI preview1) with only the plot directory visible.
-///
-/// The module should export `_start` (wasi-sdk / `cargo wasi` command style).
-/// Modules without `_start` are still linked and return exit 0 (probe path).
 pub fn run_module(wasm: &[u8], config: &HandsConfig) -> Result<HandsResult, HandsError> {
     if !config.plot_dir.exists() {
         return Err(HandsError::PlotMissing(config.plot_dir.clone()));
@@ -104,8 +98,6 @@ pub fn run_module(wasm: &[u8], config: &HandsConfig) -> Result<HandsResult, Hand
     let module = Module::new(&engine, wasm).map_err(|e| HandsError::Module(e.to_string()))?;
 
     let mut builder = WasiCtx::builder();
-    // Deny-by-default: do not inherit env; do not preopen anything except plot.
-    // Network is not enabled (no `inherit_network` / socket APIs wired).
     for a in &config.args {
         builder.arg(a);
     }
@@ -132,7 +124,8 @@ pub fn run_module(wasm: &[u8], config: &HandsConfig) -> Result<HandsResult, Hand
     }
 
     let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
-    p1::add_to_linker_sync(&mut linker, |cx| cx).map_err(|e| HandsError::Wasi(e.to_string()))?;
+    preview1::add_to_linker_sync(&mut linker, |cx| cx)
+        .map_err(|e| HandsError::Wasi(e.to_string()))?;
 
     let instance = linker
         .instantiate(&mut store, &module)
@@ -147,14 +140,12 @@ pub fn run_module(wasm: &[u8], config: &HandsConfig) -> Result<HandsResult, Hand
             },
         }
     } else {
-        // No `_start` — module linked successfully (valid probe / library path).
         0
     };
 
     Ok(HandsResult { exit_code })
 }
 
-/// Resolve the default plot directory under a Helix home (`plots/default`).
 pub fn default_plot_dir(home_root: &Path) -> PathBuf {
     home_root.join("plots").join("default")
 }
@@ -162,7 +153,6 @@ pub fn default_plot_dir(home_root: &Path) -> PathBuf {
 fn extract_exit_status(err: &anyhow::Error) -> Option<i32> {
     for cause in err.chain() {
         let s = cause.to_string();
-        // wasmtime_wasi::I32Exit and related display forms across versions.
         for prefix in [
             "Exited with i32 exit status ",
             "exit code: ",
@@ -187,10 +177,7 @@ mod tests {
     use super::*;
     use std::fs;
 
-    /// Minimal core module with no imports/exports.
     fn empty_module_bytes() -> Vec<u8> {
-        // Manually encoded `(module)` — no wat crate dependency.
-        // wasm magic + version + empty sections.
         vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]
     }
 
