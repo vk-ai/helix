@@ -8,6 +8,8 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Fixed
 
+- CI: silence unused imports in stubbed `token`/`hands`/`atlas`/`plot` CLI arms
+  so clippy `-D warnings` passes (full handler restore still tracked)
 - CI: `cargo fmt --check`, clippy `-D warnings`, and workspace tests green again
 - Restore full CLI handlers for `token`, `hands`, `atlas`, and `plot` (were stubbed after placeholder restore)
 - helixd `Status.loom` field populated from LoomConfig
