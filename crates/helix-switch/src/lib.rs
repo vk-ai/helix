@@ -48,7 +48,7 @@ pub struct Switch {
 impl Switch {
     /// Build the gate from a loaded charter.
     pub fn from_charter(charter: &Charter) -> Self {
-        let mut allowed_hosts = BTreeSet::new();
+        let allowed_hosts = BTreeSet::new();
         // No remote hosts are pre-seeded in this slice. Cloud Loom and
         // connector endpoints will be added explicitly when those adapters ship.
         // Workshop's `allow_cloud_model` does not open the internet by itself.
@@ -110,7 +110,8 @@ impl Switch {
         match self.classify(url_str)? {
             DestClass::LocalModel | DestClass::AllowedRemote => Ok(()),
             DestClass::Blocked => Err(SwitchError::Denied(format!(
-                "host not on allowlist for pack {} (url={url_str})", self.pack
+                "host not on allowlist for pack {} (url={url_str})",
+                self.pack
             ))),
         }
     }
@@ -138,7 +139,11 @@ impl Switch {
         } else {
             lines.push(format!(
                 "allowed_hosts={}",
-                self.allowed_hosts.iter().cloned().collect::<Vec<_>>().join(",")
+                self.allowed_hosts
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(",")
             ));
         }
         lines.join(" ")
@@ -146,8 +151,7 @@ impl Switch {
 }
 
 fn is_loopback_host(host: &str) -> bool {
-    matches!(host, "127.0.0.1" | "localhost" | "::1" | "[::1]")
-        || host.starts_with("127.")
+    matches!(host, "127.0.0.1" | "localhost" | "::1" | "[::1]") || host.starts_with("127.")
 }
 
 #[cfg(test)]
