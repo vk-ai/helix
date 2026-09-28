@@ -8,6 +8,12 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Fixed
 
+- CI: `cargo fmt --check`, clippy `-D warnings`, and workspace tests green again
+- Restore full CLI handlers for `token`, `hands`, `atlas`, and `plot` (were stubbed after placeholder restore)
+- helixd `Status.loom` field populated from LoomConfig
+- `plot_resolve` rejects absolute paths (e.g. `/etc/passwd`) before separator stripping
+- Clippy: unused `mut` in Switch, needless return in cap, private interface / dead code on grant helper, redundant pattern match in loom tests
+
 - CI: restore missing `(` on `format!` in `helix-cap` and run `cargo fmt --all`
   so `cargo fmt --check` and subsequent jobs pass
 - Restored truncated `helix-memory` implementation (home layout, prefs, episodes,
