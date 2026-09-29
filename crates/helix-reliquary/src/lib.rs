@@ -98,7 +98,6 @@ impl Reliquary {
 
     fn ensure_dirs(&self) -> Result<(), ReliquaryError> {
         fs::create_dir_all(self.reliquary_dir())?;
-        // Restrict permissions on Unix (best-effort).
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -161,7 +160,6 @@ impl Reliquary {
         Ok(())
     }
 
-    /// Validate name: lowercase alphanumeric + hyphen, 1–64 chars.
     pub fn validate_name(name: &str) -> Result<(), ReliquaryError> {
         if name.is_empty() || name.len() > 64 {
             return Err(ReliquaryError::InvalidName(name.into()));
@@ -178,14 +176,11 @@ impl Reliquary {
         Ok(())
     }
 
-    /// List metadata only. Never returns secret values.
     pub fn list(&self) -> Result<Vec<SecretMeta>, ReliquaryError> {
         let cat = self.read_catalog()?;
         Ok(cat.entries.into_values().collect())
     }
 
-    /// Add a named secret. Value is sealed locally; catalog holds only a reference.
-    /// Keychain backend is recorded as stub for future migration.
     pub fn add(
         &self,
         name: &str,
@@ -202,7 +197,6 @@ impl Reliquary {
         }
 
         let backend = if prefer_keychain {
-            // Stub: we still seal locally and mark as keychain-stub for visibility.
             let _ = keychain_store_stub(name, value);
             Backend::KeychainStub
         } else {
@@ -217,7 +211,6 @@ impl Reliquary {
             ref_id: ref_id.clone(),
         };
 
-        // Always keep a local sealed copy in this slice so revoke works offline.
         let mut sealed = self.read_sealed()?;
         sealed.values.insert(name.to_string(), value.to_string());
         self.write_sealed(&sealed)?;
@@ -227,7 +220,6 @@ impl Reliquary {
         Ok(meta)
     }
 
-    /// Revoke (delete) a named secret reference and its sealed material.
     pub fn revoke(&self, name: &str) -> Result<(), ReliquaryError> {
         Self::validate_name(name)?;
         let mut cat = self.read_catalog()?;
@@ -242,8 +234,6 @@ impl Reliquary {
         Ok(())
     }
 
-    /// Unwrap for adapters only. In this slice, keychain is stub; local-sealed returns value.
-    /// Callers must never put the result into model context.
     pub fn unwrap(&self, name: &str) -> Result<String, ReliquaryError> {
         Self::validate_name(name)?;
         let cat = self.read_catalog()?;
@@ -253,8 +243,6 @@ impl Reliquary {
             .ok_or_else(|| ReliquaryError::NotFound(name.into()))?;
         match meta.backend {
             Backend::KeychainStub => {
-                // Keychain unwrap is a no-op stub in this slice. Prefer local
-                // sealed copy so adapters can still be developed offline.
                 match keychain_unwrap_stub(name) {
                     Ok(v) => Ok(v),
                     Err(ReliquaryError::KeychainStub) => {
@@ -280,7 +268,6 @@ impl Reliquary {
     }
 }
 
-/// OS keychain store stub (macOS Keychain / DPAPI / libsecret). No-op success.
 fn keychain_store_stub(_name: &str, _value: &str) -> Result<(), ReliquaryError> {
     Ok(())
 }
@@ -293,7 +280,6 @@ fn keychain_unwrap_stub(_name: &str) -> Result<String, ReliquaryError> {
     Err(ReliquaryError::KeychainStub)
 }
 
-/// Ensure reliquary dir exists as part of home init (called from memory or CLI).
 pub fn ensure_reliquary_layout(root: &Path) -> io::Result<()> {
     let dir = root.join("reliquary");
     fs::create_dir_all(&dir)?;
@@ -304,7 +290,8 @@ pub fn ensure_reliquary_layout(root: &Path) -> io::Result<()> {
     }
     let catalog = dir.join("catalog.json");
     if !catalog.exists() {
-        let body = serde_json::to_string_pretty(&Catalog::default()).unwrap_or_else(|_| "{}".into());
+        let body =
+            serde_json::to_string_pretty(&Catalog::default()).unwrap_or_else(|_| "{}".into());
         fs::write(&catalog, body)?;
         #[cfg(unix)]
         {
@@ -341,7 +328,6 @@ mod tests {
         let list = r.list().unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].name, "api-token");
-        // list must not expose value — only meta is returned
         let unwrapped = r.unwrap("api-token").unwrap();
         assert_eq!(unwrapped, "s3cr3t-value");
         r.revoke("api-token").unwrap();
@@ -372,7 +358,6 @@ mod tests {
         let r = temp_reliquary();
         let meta = r.add("kc-item", "hidden", true).unwrap();
         assert_eq!(meta.backend, Backend::KeychainStub);
-        // Still unwraps via local sealed fallback in this slice
         assert_eq!(r.unwrap("kc-item").unwrap(), "hidden");
         let _ = fs::remove_dir_all(&r.home.root);
     }
