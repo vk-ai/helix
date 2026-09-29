@@ -8,6 +8,10 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Fixed
 
+- CI: `cargo fmt --check` — reformat long lines in `helix-memory` tests,
+  `helix-reliquary` catalog write, and `helixd` (import order, Switch/attenuate/complete)
+  so the Format job passes again
+
 - CI: silence unused imports in stubbed `token`/`hands`/`atlas`/`plot` CLI arms
   so clippy `-D warnings` passes (full handler restore still tracked)
 - CI: `cargo fmt --check`, clippy `-D warnings`, and workspace tests green again
