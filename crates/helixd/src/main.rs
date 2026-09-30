@@ -1,36 +1,26 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
-use axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    routing::{get, post},
-    Json, Router,
-};
-use helix_cap::{rights_for_charter, CapAuthority, CapToken};
-use helix_charter::Charter;
-use helix_memory::{HelixHome, PREFS_CONTEXT_CHAR_CAP};
-use helix_protocol::{
-    AskRequest, AskResponse, AttenuateTokenRequest, CreateGrantRequest, DecideGrantRequest,
-    ErrorBody, Grant, GrantDecision, GrantListResponse, GrantScope, GrantStatus, IssueTokenRequest,
-    Status, VerifyTokenRequest, VerifyTokenResponse, WritePermission, DEFAULT_BIND, DEFAULT_MODEL,
-    DEFAULT_OLLAMA,
-};
-mod desk;
-use helix_loom::{self, LoomConfig};
-use helix_reliquary::Reliquary;
+use axum::extract::State;
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use helix_cap::CapAuthority;
+use helix_memory::HelixHome;
+use helix_protocol::{Grant, Status, DEFAULT_BIND, DEFAULT_MODEL, DEFAULT_OLLAMA};
 use helix_switch::Switch;
-use serde_json::json;
+
+mod api;
+mod desk;
+
+use api::{ask, attenuate_token, create_grant, decide_grant, issue_token, list_grants, verify_token};
 
 struct App {
     home: HelixHome,
     bind: String,
     model: String,
     ollama: String,
-    /// In-memory pending/allowed grants for this daemon process.
     grants: Mutex<HashMap<String, Grant>>,
-    /// Session MAC key for capability tokens (ephemeral; tokens die on restart).
     caps: CapAuthority,
 }
 
@@ -84,6 +74,10 @@ fn current_switch(app: &App) -> Switch {
     Switch::for_pack(&pack).unwrap_or_else(|_| {
         Switch::for_pack("hearthside").expect("hearthside always exists")
     })
+}
+
+async fn ollama_ok(app: &App, switch: &Switch) -> bool {
+    helix_loom::ollama_reachable(switch, &app.ollama).await
 }
 
 async fn status(State(app): State<Arc<App>>) -> Json<Status> {
