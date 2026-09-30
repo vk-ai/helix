@@ -265,14 +265,17 @@ pub async fn attenuate_token(
         )
     })?;
     let keep: BTreeSet<String> = req.keep.into_iter().collect();
-    let child = app.caps.attenuate(&parent, keep, req.ttl_secs).map_err(|e| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorBody {
-                error: e.to_string(),
-            }),
-        )
-    })?;
+    let child = app
+        .caps
+        .attenuate(&parent, keep, req.ttl_secs)
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorBody {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
     let _ = app.home.append_chronicle(
         &json!({
             "ts": chrono::Utc::now().to_rfc3339(),

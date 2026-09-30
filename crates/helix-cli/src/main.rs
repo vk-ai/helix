@@ -6,6 +6,7 @@ use clap::{Parser, Subcommand};
 use helix_atlas::{Atlas, Trust, UNTRUSTED_FUEL_CAP};
 use helix_charter::Charter;
 use helix_hands::{run_module, HandsConfig};
+use helix_mail::Mailbox;
 use helix_memory::{HelixHome, PREFS_CONTEXT_CHAR_CAP};
 use helix_protocol::{
     AskRequest, AskResponse, AttenuateTokenRequest, CreateGrantRequest, DecideGrantRequest,
@@ -13,10 +14,13 @@ use helix_protocol::{
     VerifyTokenResponse, DEFAULT_BIND,
 };
 use helix_reliquary::Reliquary;
-use helix_mail::Mailbox;
 
 #[derive(Parser)]
-#[command(name = "helix", version, about = "Helix local-first personal agent CLI")]
+#[command(
+    name = "helix",
+    version,
+    about = "Helix local-first personal agent CLI"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Commands,
@@ -104,7 +108,9 @@ enum SecretsCmd {
         #[arg(long)]
         keychain: bool,
     },
-    Revoke { name: String },
+    Revoke {
+        name: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -116,9 +122,15 @@ enum GrantCmd {
         #[arg(long)]
         requester: Option<String>,
     },
-    AllowOnce { id: String },
-    AllowTask { id: String },
-    Deny { id: String },
+    AllowOnce {
+        id: String,
+    },
+    AllowTask {
+        id: String,
+    },
+    Deny {
+        id: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -141,7 +153,9 @@ enum TokenCmd {
         #[arg(long)]
         require: Option<String>,
     },
-    Show { token: String },
+    Show {
+        token: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -355,7 +369,9 @@ fn run() -> anyhow::Result<()> {
                     let home = HelixHome::resolve()?;
                     let pack = home.read_pack().unwrap_or_else(|_| "hearthside".into());
                     let charter = Charter::builtin(&pack)?;
-                    let prefs = home.prefs_context(PREFS_CONTEXT_CHAR_CAP).unwrap_or_default();
+                    let prefs = home
+                        .prefs_context(PREFS_CONTEXT_CHAR_CAP)
+                        .unwrap_or_default();
                     let retrieved = home.retrieve_context(&text).unwrap_or_default();
                     println!("Charter ({pack}): {}", charter.summary);
                     if !prefs.is_empty() {
@@ -406,7 +422,7 @@ fn run() -> anyhow::Result<()> {
                     println!("pref {name} deleted");
                 }
             }
-        },
+        }
         Commands::Secrets { cmd } => {
             let home = HelixHome::resolve()?;
             let rel = Reliquary::open(home)?;
@@ -442,7 +458,7 @@ fn run() -> anyhow::Result<()> {
                     println!("revoked {name}");
                 }
             }
-        },
+        }
         Commands::Grant { cmd } => match cmd {
             GrantCmd::List => {
                 let url = format!("{}/v1/grants", base_url());
@@ -517,7 +533,11 @@ fn run() -> anyhow::Result<()> {
                         println!();
                     }
                 }
-                FilesCmd::Write { path, content, plot } => {
+                FilesCmd::Write {
+                    path,
+                    content,
+                    plot,
+                } => {
                     let body = if let Some(c) = content {
                         c
                     } else {
@@ -582,7 +602,11 @@ fn run() -> anyhow::Result<()> {
                     let m = mailbox.draft(&to, &subject, &body, oauth_ref.as_deref())?;
                     println!("{}  draft  to={}  subject={}", m.id, m.to, m.subject);
                 }
-                MailCmd::Seed { from, subject, body } => {
+                MailCmd::Seed {
+                    from,
+                    subject,
+                    body,
+                } => {
                     let body = body.unwrap_or_else(|| {
                         "Your login code is 482913. Open https://auth.example.com/magic?token=abc to continue.".into()
                     });

@@ -16,8 +16,9 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Fixed
 
-- CI: `cargo fmt --check` — reformat long lines in `helix-memory` tests,
-  `helix-reliquary` catalog write, and `helixd` so the Format job passes again
+- CI: `cargo fmt --check` across workspace crates after the desk slice
+- Clippy `-D warnings`: needless `return` in `helix-cap`, redundant `matches!` in loom tests
+- `plot_resolve` rejects absolute paths (e.g. `/etc/passwd`) before stripping separators
 
 ## [0.1.0] - 2026-09-13
 

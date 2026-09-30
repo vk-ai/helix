@@ -237,7 +237,7 @@ fn getrandom_fill(buf: &mut [u8]) -> Result<(), ()> {
         use std::io::Read;
         let mut f = std::fs::File::open("/dev/urandom").map_err(|_| ())?;
         f.read_exact(buf).map_err(|_| ())?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(unix))]
     {

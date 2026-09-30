@@ -153,11 +153,7 @@ pub fn default_plot_dir(home_root: &Path) -> PathBuf {
 fn extract_exit_status(err: &anyhow::Error) -> Option<i32> {
     for cause in err.chain() {
         let s = cause.to_string();
-        for prefix in [
-            "Exited with i32 exit status ",
-            "exit code: ",
-            "I32Exit(",
-        ] {
+        for prefix in ["Exited with i32 exit status ", "exit code: ", "I32Exit("] {
             if let Some(rest) = s.strip_prefix(prefix) {
                 let digits: String = rest
                     .chars()

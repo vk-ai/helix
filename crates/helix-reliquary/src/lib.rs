@@ -242,20 +242,18 @@ impl Reliquary {
             .get(name)
             .ok_or_else(|| ReliquaryError::NotFound(name.into()))?;
         match meta.backend {
-            Backend::KeychainStub => {
-                match keychain_unwrap_stub(name) {
-                    Ok(v) => Ok(v),
-                    Err(ReliquaryError::KeychainStub) => {
-                        let sealed = self.read_sealed()?;
-                        sealed
-                            .values
-                            .get(name)
-                            .cloned()
-                            .ok_or_else(|| ReliquaryError::NotFound(name.into()))
-                    }
-                    Err(e) => Err(e),
+            Backend::KeychainStub => match keychain_unwrap_stub(name) {
+                Ok(v) => Ok(v),
+                Err(ReliquaryError::KeychainStub) => {
+                    let sealed = self.read_sealed()?;
+                    sealed
+                        .values
+                        .get(name)
+                        .cloned()
+                        .ok_or_else(|| ReliquaryError::NotFound(name.into()))
                 }
-            }
+                Err(e) => Err(e),
+            },
             Backend::LocalSealed => {
                 let sealed = self.read_sealed()?;
                 sealed

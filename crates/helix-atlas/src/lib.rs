@@ -157,9 +157,7 @@ impl Atlas {
     /// Pin a tool by path. Overwrites an existing pin of the same name.
     pub fn pin(&self, name: &str, path: &Path) -> Result<Pin, AtlasError> {
         Self::validate_name(name)?;
-        let abs = path
-            .canonicalize()
-            .unwrap_or_else(|_| path.to_path_buf());
+        let abs = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
         let sha256 = Self::hash_file(path)?;
         let entry = Pin {
             name: name.to_string(),
@@ -229,7 +227,11 @@ impl Atlas {
                 .canonicalize()
                 .unwrap_or_else(|_| hint_path.to_path_buf());
             let abs_s = abs.display().to_string();
-            if let Some(pin) = file.tools.iter().find(|t| t.path == abs_s || t.path == hint) {
+            if let Some(pin) = file
+                .tools
+                .iter()
+                .find(|t| t.path == abs_s || t.path == hint)
+            {
                 if pin.sha256 != sha256 {
                     return Ok(Trust::Untrusted {
                         reason: format!(

@@ -13,7 +13,9 @@ use helix_switch::Switch;
 mod api;
 mod desk;
 
-use api::{ask, attenuate_token, create_grant, decide_grant, issue_token, list_grants, verify_token};
+use api::{
+    ask, attenuate_token, create_grant, decide_grant, issue_token, list_grants, verify_token,
+};
 
 struct App {
     home: HelixHome,
@@ -71,9 +73,8 @@ async fn health() -> &'static str {
 
 fn current_switch(app: &App) -> Switch {
     let pack = app.home.read_pack().unwrap_or_else(|_| "hearthside".into());
-    Switch::for_pack(&pack).unwrap_or_else(|_| {
-        Switch::for_pack("hearthside").expect("hearthside always exists")
-    })
+    Switch::for_pack(&pack)
+        .unwrap_or_else(|_| Switch::for_pack("hearthside").expect("hearthside always exists"))
 }
 
 async fn ollama_ok(app: &App, switch: &Switch) -> bool {

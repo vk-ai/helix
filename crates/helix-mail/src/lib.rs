@@ -169,12 +169,7 @@ impl Mailbox {
         Ok(msg)
     }
 
-    pub fn seed_inbox(
-        &self,
-        from: &str,
-        subject: &str,
-        body: &str,
-    ) -> Result<Message, MailError> {
+    pub fn seed_inbox(&self, from: &str, subject: &str, body: &str) -> Result<Message, MailError> {
         let id = format!("msg-{}", Utc::now().format("%Y%m%dT%H%M%S%.3fZ"));
         let msg = Message {
             id: id.clone(),
@@ -255,10 +250,8 @@ fn validate_id(id: &str) -> Result<(), MailError> {
 
 pub fn redact_text(input: &str) -> String {
     let otp = Regex::new(r"\b(\d{4,8})\b").expect("otp regex");
-    let magic = Regex::new(
-        r"(?i)https?://[^\s]+(?:magic|login|auth|verify|token|otp|reset)[^\s]*",
-    )
-    .expect("magic regex");
+    let magic = Regex::new(r"(?i)https?://[^\s]+(?:magic|login|auth|verify|token|otp|reset)[^\s]*")
+        .expect("magic regex");
     let step1 = magic.replace_all(input, "[REDACTED-LINK]");
     let step2 = otp.replace_all(&step1, "[REDACTED-CODE]");
     step2.into_owned()
@@ -307,7 +300,12 @@ mod tests {
     fn draft_list_send() {
         let m = temp_mail();
         let d = m
-            .draft("alice@example.com", "Hello", "Body text", Some("mail-oauth"))
+            .draft(
+                "alice@example.com",
+                "Hello",
+                "Body text",
+                Some("mail-oauth"),
+            )
             .unwrap();
         assert_eq!(d.folder, "drafts");
         assert_eq!(m.list("drafts").unwrap().len(), 1);

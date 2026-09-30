@@ -32,7 +32,9 @@ pub enum LoomError {
     CloudModelDenied,
     #[error("switch denied egress: {0}")]
     Switch(#[from] SwitchError),
-    #[error("missing Reliquary API key reference (set HELIX_OPENAI_KEY_REF and helix secrets add …)")]
+    #[error(
+        "missing Reliquary API key reference (set HELIX_OPENAI_KEY_REF and helix secrets add …)"
+    )]
     MissingKeyRef,
     #[error("reliquary: {0}")]
     Reliquary(String),
@@ -314,19 +316,16 @@ mod tests {
         };
         // Sync check of policy only — we don't run the async body in this unit test.
         assert!(!charter.allow_cloud_model);
-        assert!(matches!(
-            switch.check("https://api.openai.com/v1/chat/completions"),
-            Err(_)
-        ));
+        assert!(switch
+            .check("https://api.openai.com/v1/chat/completions")
+            .is_err());
         let _ = (charter, switch, config);
     }
 
     #[test]
     fn ollama_url_passes_hearthside_switch() {
         let switch = Switch::for_pack("hearthside").unwrap();
-        assert!(switch
-            .check("http://127.0.0.1:11434/api/generate")
-            .is_ok());
+        assert!(switch.check("http://127.0.0.1:11434/api/generate").is_ok());
     }
 
     #[test]

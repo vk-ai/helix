@@ -76,10 +76,14 @@ pub struct PlotEntry {
 impl HelixHome {
     pub fn resolve() -> Result<Self, MemoryError> {
         if let Ok(h) = std::env::var("HELIX_HOME") {
-            return Ok(Self { root: PathBuf::from(h) });
+            return Ok(Self {
+                root: PathBuf::from(h),
+            });
         }
         let home = dirs::home_dir().ok_or(MemoryError::NoHome)?;
-        Ok(Self { root: home.join("Helix") })
+        Ok(Self {
+            root: home.join("Helix"),
+        })
     }
 
     pub fn init(&self, pack: &str) -> Result<(), MemoryError> {
@@ -112,7 +116,10 @@ impl HelixHome {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = fs::set_permissions(self.root.join("reliquary"), fs::Permissions::from_mode(0o700));
+            let _ = fs::set_permissions(
+                self.root.join("reliquary"),
+                fs::Permissions::from_mode(0o700),
+            );
         }
         Ok(())
     }
@@ -153,7 +160,10 @@ impl HelixHome {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let mut f = fs::OpenOptions::new().create(true).append(true).open(&path)?;
+        let mut f = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)?;
         writeln!(f, "{line}")?;
         Ok(())
     }
@@ -166,7 +176,10 @@ impl HelixHome {
         if name.is_empty() || name.len() > 64 {
             return Err(MemoryError::InvalidPrefName(name.into()));
         }
-        if !name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_') {
+        if !name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+        {
             return Err(MemoryError::InvalidPrefName(name.into()));
         }
         Ok(())
@@ -192,7 +205,11 @@ impl HelixHome {
             if path.extension().and_then(|e| e.to_str()) != Some("md") {
                 continue;
             }
-            let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+            let name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
             if name.is_empty() {
                 continue;
             }
@@ -231,7 +248,10 @@ impl HelixHome {
 
     pub fn retrieve_context(&self, query: &str) -> Result<String, MemoryError> {
         let q = query.to_ascii_lowercase();
-        let tokens: Vec<&str> = q.split(|c: char| !c.is_alphanumeric()).filter(|t| t.len() > 2).collect();
+        let tokens: Vec<&str> = q
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|t| t.len() > 2)
+            .collect();
         if tokens.is_empty() {
             return Ok(String::new());
         }
@@ -351,7 +371,9 @@ impl HelixHome {
     pub fn plot_dir(&self, plot: &str) -> Result<PathBuf, MemoryError> {
         if plot.is_empty()
             || plot.contains("..")
-            || !plot.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            || !plot
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
         {
             return Err(MemoryError::InvalidPlotName(plot.into()));
         }
@@ -366,7 +388,11 @@ impl HelixHome {
     /// Empty `rel` means the plot root itself.
     pub fn plot_resolve(&self, plot: &str, rel: &str) -> Result<PathBuf, MemoryError> {
         let plot_dir = self.plot_dir(plot)?;
-        let rel = rel.trim().trim_start_matches('/').trim_start_matches('\\');
+        let raw = rel.trim();
+        if raw.starts_with('/') || raw.starts_with('\\') || Path::new(raw).is_absolute() {
+            return Err(MemoryError::InvalidPlotPath(rel.into()));
+        }
+        let rel = raw.trim_start_matches('/').trim_start_matches('\\');
         if rel.is_empty() {
             return Ok(plot_dir);
         }
@@ -503,7 +529,11 @@ impl HelixHome {
 
     fn tree_manifest(plot_dir: &Path) -> Result<Vec<(String, String)>, MemoryError> {
         let mut entries = Vec::new();
-        fn walk(base: &Path, dir: &Path, out: &mut Vec<(String, String)>) -> Result<(), MemoryError> {
+        fn walk(
+            base: &Path,
+            dir: &Path,
+            out: &mut Vec<(String, String)>,
+        ) -> Result<(), MemoryError> {
             for entry in fs::read_dir(dir)? {
                 let entry = entry?;
                 let path = entry.path();
@@ -514,7 +544,11 @@ impl HelixHome {
                 if path.is_dir() {
                     walk(base, &path, out)?;
                 } else if path.is_file() {
-                    let rel = path.strip_prefix(base).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+                    let rel = path
+                        .strip_prefix(base)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .replace('\\', "/");
                     let bytes = fs::read(&path)?;
                     let mut hasher = Sha256::new();
                     hasher.update(&bytes);
@@ -540,7 +574,11 @@ impl HelixHome {
         hex::encode(hasher.finalize())
     }
 
-    pub fn plot_commit(&self, plot: &str, message: Option<&str>) -> Result<CommitMeta, MemoryError> {
+    pub fn plot_commit(
+        &self,
+        plot: &str,
+        message: Option<&str>,
+    ) -> Result<CommitMeta, MemoryError> {
         let plot_dir = self.plot_dir(plot)?;
         let manifest = Self::tree_manifest(&plot_dir)?;
         let id = Self::manifest_id(&manifest);
@@ -561,7 +599,10 @@ impl HelixHome {
             message: message.map(|s| s.to_string()),
             file_count: manifest.len(),
         };
-        fs::write(commit_root.join("meta.json"), serde_json::to_string_pretty(&meta)? + "\n")?;
+        fs::write(
+            commit_root.join("meta.json"),
+            serde_json::to_string_pretty(&meta)? + "\n",
+        )?;
         fs::write(Self::head_path(&plot_dir), format!("{id}\n"))?;
         Ok(meta)
     }
@@ -614,14 +655,22 @@ impl HelixHome {
     pub fn plot_rewind(&self, plot: &str, prefix: &str) -> Result<CommitMeta, MemoryError> {
         let plot_dir = self.plot_dir(plot)?;
         let commits = self.plot_list(plot)?;
-        let matches: Vec<&CommitMeta> = commits.iter().filter(|c| c.id.starts_with(prefix)).collect();
+        let matches: Vec<&CommitMeta> = commits
+            .iter()
+            .filter(|c| c.id.starts_with(prefix))
+            .collect();
         if matches.is_empty() {
             return Err(MemoryError::CommitNotFound(prefix.into()));
         }
         if matches.len() > 1 && !matches.iter().any(|c| c.id == prefix) {
             return Err(MemoryError::AmbiguousCommit(prefix.into()));
         }
-        let meta = matches.iter().find(|c| c.id == prefix).copied().unwrap_or(matches[0]).clone();
+        let meta = matches
+            .iter()
+            .find(|c| c.id == prefix)
+            .copied()
+            .unwrap_or(matches[0])
+            .clone();
         let tree_dir = Self::commits_dir(&plot_dir).join(&meta.id).join("tree");
         if !tree_dir.is_dir() {
             return Err(MemoryError::CommitNotFound(meta.id.clone()));
@@ -673,7 +722,10 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_home() -> HelixHome {
-        let n = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let n = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let root = std::env::temp_dir().join(format!("helix-mem-test-{n}"));
         let _ = fs::remove_dir_all(&root);
         let home = HelixHome { root };
@@ -706,9 +758,14 @@ mod tests {
     #[test]
     fn episode_write() {
         let h = temp_home();
-        let ep = h.write_episode("hello", "hi there", "accept", None).unwrap();
+        let ep = h
+            .write_episode("hello", "hi there", "accept", None)
+            .unwrap();
         assert!(ep.id.starts_with("ep-"));
-        let path = h.root.join("memory/episodes").join(format!("{}.json", ep.id));
+        let path = h
+            .root
+            .join("memory/episodes")
+            .join(format!("{}.json", ep.id));
         assert!(path.exists());
         let _ = fs::remove_dir_all(&h.root);
     }
@@ -733,13 +790,16 @@ mod tests {
     #[test]
     fn plot_files_roundtrip() {
         let h = temp_home();
-        h.plot_write_file("default", "notes/hello.txt", "hello plot").unwrap();
+        h.plot_write_file("default", "notes/hello.txt", "hello plot")
+            .unwrap();
         let body = h.plot_read_file("default", "notes/hello.txt").unwrap();
         assert_eq!(body, "hello plot");
         let entries = h.plot_list_files("default", "").unwrap();
         assert!(entries.iter().any(|e| e.path == "notes" && e.is_dir));
         let nested = h.plot_list_files("default", "notes").unwrap();
-        assert!(nested.iter().any(|e| e.path == "notes/hello.txt" && !e.is_dir));
+        assert!(nested
+            .iter()
+            .any(|e| e.path == "notes/hello.txt" && !e.is_dir));
         h.plot_delete_file("default", "notes/hello.txt").unwrap();
         assert!(h.plot_read_file("default", "notes/hello.txt").is_err());
         let _ = fs::remove_dir_all(&h.root);
