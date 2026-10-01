@@ -11,6 +11,7 @@ use helix_protocol::{Grant, Status, DEFAULT_BIND, DEFAULT_MODEL, DEFAULT_OLLAMA}
 use helix_switch::Switch;
 
 mod api;
+mod browser;
 mod desk;
 
 use api::{
@@ -55,6 +56,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/", get(desk::page))
         .route("/desk", get(desk::page))
         .route("/v1/desk", get(desk::snapshot))
+        .route("/browser", get(browser::page))
+        .route("/v1/browser", get(browser::snapshot))
+        .route("/v1/browser/resume", post(browser::resume))
         .with_state(app);
     let addr: SocketAddr = bind.parse()?;
     if !addr.ip().is_loopback() {
