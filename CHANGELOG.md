@@ -8,6 +8,9 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Browser adapter (`helix-browser`): dedicated profile under `~/Helix/browser/profile`,
+  loopback pane at `/browser`, `helix browser open|resume|status|pane`. Challenge
+  URLs pause for a human; there is no CAPTCHA solver in core
 - Loopback desk page (`helix-desk`): helixd serves `/desk` and `/v1/desk` for
   Ask banners, Reliquary names (never values), and Chronicle tail
 - First plot-scoped file adapter: `helix files ls|read|write|delete` operates only

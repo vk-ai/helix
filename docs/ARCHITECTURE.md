@@ -13,8 +13,10 @@ model is frozen. Authority is issued, never assumed.
   active plot is preopened (guest `/plot`). CLI: `helix hands run`.
 - **File adapter** — plot-scoped list/read/write/delete via `helix files`
   (same plot root as Hands; no host shell).
-- **Adapters** (later) — native processes for mail, browser, OS APIs.
-- **Desktop** (later) — Tauri app for Ask banners, Reliquary, Plot, Chronicle.
+- **Mail adapter** — local mailbox (`helix mail`) on desk+; send is Ask-gated.
+- **Browser adapter** — dedicated profile + loopback pane (`/browser`); pauses on
+  challenge; human resumes; no solver in core.
+- **Desktop** — loopback desk page today; Tauri tray optional later.
 
 ## Data
 
@@ -26,6 +28,8 @@ model is frozen. Authority is issued, never assumed.
   reliquary/          # catalog.json + sealed.json (values never in prompts)
   atlas/pins.json
   chronicle/log.jsonl
+  mail/{inbox,drafts,outbox}/
+  browser/profile/    # dedicated browser profile (no solver)
 ```
 
 Secret values live in Reliquary (local sealed store today; OS keychain later).
@@ -96,6 +100,12 @@ deletes files strictly under the active plot. Paths cannot escape via `..`,
 absolute forms, or into `.helix`. This is the first native tool surface; it
 does not invoke a host shell.
 
+## Browser adapter
+
+`helix-browser` keeps a dedicated profile under `~/Helix/browser/profile` and a
+loopback pane at `/browser`. Desk+ packs only. Challenge-looking URLs pause the
+session; resume is a human action. There is no CAPTCHA solver in core.
+
 ## Learning
 
 No LoRA. Everyday improvement is retrieval of playbooks, tool notes, and
@@ -114,4 +124,7 @@ propose/execute/select) is optional and not on the default path.
 8. Atlas pins: digest-pinned tools + untrusted fuel cap (shipped)
 9. Plot commits: content-addressed snapshot + rewind (shipped)
 10. First plot-scoped file adapter through Hands boundary (shipped)
-11. Browser pane with human take-over
+11. Mail adapter read/draft + Ask-gated send (shipped)
+12. Loopback desk page (shipped)
+13. Browser pane with human take-over (shipped; no solver)
+14. Optional Workshop-only Apprentice (not started)
