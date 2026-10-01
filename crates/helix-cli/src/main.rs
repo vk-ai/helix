@@ -16,6 +16,7 @@ use helix_protocol::{
 use helix_reliquary::Reliquary;
 
 mod browser;
+mod run;
 
 #[derive(Parser)]
 #[command(
@@ -285,4 +286,14 @@ enum BrowserCmd {
     Resume,
     /// Print the loopback pane URL
     Pane,
+}
+
+fn main() -> ExitCode {
+    match run::go() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
 }
