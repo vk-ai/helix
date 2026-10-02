@@ -16,6 +16,8 @@ model is frozen. Authority is issued, never assumed.
 - **Mail adapter** — local mailbox (`helix mail`) on desk+; send is Ask-gated.
 - **Browser adapter** — dedicated profile + loopback pane (`/browser`); pauses on
   challenge; human resumes; no solver in core.
+- **Apprentice** — workshop-only sandbox (`helix apprentice`). Propose/execute/select
+  fill tool notes. Never on the default path. Never opens Reliquary.
 - **Desktop** — loopback desk page today; Tauri tray optional later.
 
 ## Data
@@ -30,6 +32,7 @@ model is frozen. Authority is issued, never assumed.
   chronicle/log.jsonl
   mail/{inbox,drafts,outbox}/
   browser/profile/    # dedicated browser profile (no solver)
+  workshop/apprentice/ # sandbox trials (workshop pack only)
 ```
 
 Secret values live in Reliquary (local sealed store today; OS keychain later).
@@ -106,11 +109,19 @@ does not invoke a host shell.
 loopback pane at `/browser`. Desk+ packs only. Challenge-looking URLs pause the
 session; resume is a human action. There is no CAPTCHA solver in core.
 
+## Apprentice (workshop only)
+
+`helix-apprentice` is off the default path. `require_workshop` refuses hearthside
+and desk. The sandbox is a fixed set (`echo`, `count_words`, `upper`): no host
+shell, no network, no secret unwrap. `propose` ranks tools against a task,
+`execute` runs one of them, `select` writes `memory/tools/<name>.md`. Reliquary
+paths are never read.
+
 ## Learning
 
 No LoRA. Everyday improvement is retrieval of playbooks, tool notes, and
 preferences written after a clear user verdict. Apprentice (sandbox
-propose/execute/select) is optional and not on the default path.
+propose/execute/select) is optional and workshop-only.
 
 ## Slices
 
@@ -127,4 +138,4 @@ propose/execute/select) is optional and not on the default path.
 11. Mail adapter read/draft + Ask-gated send (shipped)
 12. Loopback desk page (shipped)
 13. Browser pane with human take-over (shipped; no solver)
-14. Optional Workshop-only Apprentice (not started)
+14. Optional Workshop-only Apprentice (shipped; sandbox only, no Reliquary)

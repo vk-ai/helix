@@ -15,6 +15,7 @@ use helix_protocol::{
 };
 use helix_reliquary::Reliquary;
 
+mod apprentice;
 mod browser;
 mod run;
 
@@ -90,6 +91,11 @@ enum Commands {
     Browser {
         #[command(subcommand)]
         cmd: BrowserCmd,
+    },
+    /// Workshop-only Apprentice: sandbox propose/execute/select into tool notes
+    Apprentice {
+        #[command(subcommand)]
+        cmd: ApprenticeCmd,
     },
 }
 
@@ -272,6 +278,22 @@ enum MailCmd {
         id: String,
         #[arg(long)]
         grant: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum ApprenticeCmd {
+    Status,
+    Propose {
+        task: String,
+    },
+    Execute {
+        tool: String,
+        #[arg(long, default_value = "")]
+        input: String,
+    },
+    Select {
+        tool: String,
     },
 }
 

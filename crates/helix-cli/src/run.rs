@@ -90,16 +90,12 @@ pub fn go() -> anyhow::Result<()> {
         Commands::Files { cmd } => cmd_files(cmd)?,
         Commands::Mail { cmd } => cmd_mail(cmd)?,
         Commands::Browser { cmd } => browser::run(cmd)?,
+        Commands::Apprentice { cmd } => apprentice::run(cmd)?,
     }
     Ok(())
 }
 
-fn cmd_ask(
-    text: String,
-    accept: bool,
-    reject: bool,
-    edit: Option<String>,
-) -> anyhow::Result<()> {
+fn cmd_ask(text: String, accept: bool, reject: bool, edit: Option<String>) -> anyhow::Result<()> {
     let url = format!("{}/v1/ask", base_url());
     let res = http()
         .post(&url)

@@ -8,6 +8,11 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Workshop-only Apprentice (`helix-apprentice`): `helix apprentice propose|execute|select|status`
+  ranks a fixed sandbox (echo, count_words, upper), runs it without a host shell,
+  and writes the selected note under `memory/tools/`. Hearthside and desk are refused.
+  Reliquary is never opened.
+
 - Browser adapter (`helix-browser`): dedicated profile under `~/Helix/browser/profile`,
   loopback pane at `/browser`, `helix browser open|resume|status|pane`. Challenge
   URLs pause for a human; there is no CAPTCHA solver in core
