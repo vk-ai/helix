@@ -24,6 +24,8 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Fixed
 
+- CI: `cargo fmt --check` in `helix-browser` (challenge status line and pane assertion wrapping)
+
 - CI: `cargo fmt --check` across workspace crates after the desk slice
 - Clippy `-D warnings`: needless `return` in `helix-cap`, redundant `matches!` in loom tests
 - `plot_resolve` rejects absolute paths (e.g. `/etc/passwd`) before stripping separators

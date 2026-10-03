@@ -193,10 +193,7 @@ impl Browser {
             self.profile_dir().display(),
             s.state,
             s.url,
-            s.challenge
-                .as_ref()
-                .map(|c| c.kind.as_str())
-                .unwrap_or("-")
+            s.challenge.as_ref().map(|c| c.kind.as_str()).unwrap_or("-")
         ))
     }
 }
@@ -313,6 +310,8 @@ mod tests {
         let html = pane_html();
         assert!(html.contains("no CAPTCHA solver"));
         assert!(html.contains("human solved"));
-        assert!(!html.to_ascii_lowercase().contains("solve captcha automatically"));
+        assert!(!html
+            .to_ascii_lowercase()
+            .contains("solve captcha automatically"));
     }
 }
