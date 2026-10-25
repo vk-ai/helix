@@ -8,6 +8,8 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- Committed `Cargo.lock` for reproducible workspace builds (repo hygiene).
+
 - Workshop-only Apprentice (`helix-apprentice`): `helix apprentice propose|execute|select|status`
   ranks a fixed sandbox (echo, count_words, upper), runs it without a host shell,
   and writes the selected note under `memory/tools/`. Hearthside and desk are refused.
