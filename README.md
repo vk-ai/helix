@@ -7,15 +7,26 @@ capabilities you issued; secrets stay in the OS keychain; memory is files you
 can open, edit, and delete. The model never sees API keys or passwords.
 
 > Status: **early slice**. Daemon, CLI, charter packs, Loom, memory write,
-> preferences, Reliquary, Ask grants, tokens, Switch, Hands, Atlas, plot
-> commits, plot files, mail, desk page, and browser profile pane work today.
-> Workshop Apprentice is optional and off the default path (workshop pack only).
+> preferences, Reliquary, Ask grants, capability tokens (CLI + daemon),
+> Switch, Hands, Atlas, plot commits, plot files, mail, desk page, and browser
+> profile pane work today. Workshop Apprentice is optional and off the default
+> path (workshop pack only).
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
 [Install](#install) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
 Clone and build from source (`cargo install --path crates/helix-cli` and
 `crates/helixd`). Run `helix init`, start `helixd` on loopback, then `helix status`.
+
+Capability tokens (shrink-only; start helixd first):
+
+```bash
+helix token issue --rights plot.read,local.model --ttl 3600
+# copy the JSON token
+helix token attenuate '<json>' --keep plot.read
+helix token verify '<json>' --require plot.read
+helix token show '<json>'
+```
 
 Workshop Apprentice (workshop pack only; sandbox tools; no Reliquary):
 

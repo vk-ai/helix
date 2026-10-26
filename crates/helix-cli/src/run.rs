@@ -60,21 +60,7 @@ pub fn go() -> anyhow::Result<()> {
         Commands::Pref { cmd } => cmd_pref(cmd)?,
         Commands::Secrets { cmd } => cmd_secrets(cmd)?,
         Commands::Grant { cmd } => cmd_grant(cmd)?,
-        Commands::Token { cmd } => {
-            let _ = (
-                std::any::type_name::<Atlas>(),
-                std::any::type_name::<Trust>(),
-                UNTRUSTED_FUEL_CAP,
-                std::any::type_name::<HandsConfig>(),
-                std::any::type_name::<IssueTokenRequest>(),
-                std::any::type_name::<AttenuateTokenRequest>(),
-                std::any::type_name::<VerifyTokenRequest>(),
-                std::any::type_name::<VerifyTokenResponse>(),
-            );
-            let _ = run_module;
-            let _ = cmd;
-            anyhow::bail!("token subcommands: restore full CLI handlers (tracked)");
-        }
+        Commands::Token { cmd } => cmd_token(cmd)?,
         Commands::Hands { cmd } => {
             let _ = cmd;
             anyhow::bail!("hands: restore full CLI handlers (tracked)");
@@ -262,6 +248,72 @@ fn cmd_grant(cmd: GrantCmd) -> anyhow::Result<()> {
         GrantCmd::AllowOnce { id } => decide_grant(&id, GrantDecision::AllowOnce)?,
         GrantCmd::AllowTask { id } => decide_grant(&id, GrantDecision::AllowTask)?,
         GrantCmd::Deny { id } => decide_grant(&id, GrantDecision::Deny)?,
+    }
+    Ok(())
+}
+
+fn cmd_token(cmd: TokenCmd) -> anyhow::Result<()> {
+    match cmd {
+        TokenCmd::Issue { rights, ttl } => {
+            let rights_vec = rights
+                .map(|s| {
+                    s.split(',')
+                        .map(|r| r.trim().to_string())
+                        .filter(|r| !r.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default();
+            let req = IssueTokenRequest {
+                rights: rights_vec,
+                ttl_secs: ttl,
+            };
+            let url = format!("{}/v1/tokens", base_url());
+            let res = http().post(&url).json(&req).send()?;
+            let token: serde_json::Value = res.error_for_status()?.json()?;
+            println!("{}", serde_json::to_string_pretty(&token)?);
+        }
+        TokenCmd::Attenuate { token, keep, ttl } => {
+            let token_val: serde_json::Value = serde_json::from_str(&token)
+                .map_err(|e| anyhow::anyhow!("token is not valid JSON: {e}"))?;
+            let keep_vec: Vec<String> = keep
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            let req = AttenuateTokenRequest {
+                token: token_val,
+                keep: keep_vec,
+                ttl_secs: ttl,
+            };
+            let url = format!("{}/v1/tokens/attenuate", base_url());
+            let res = http().post(&url).json(&req).send()?;
+            let child: serde_json::Value = res.error_for_status()?.json()?;
+            println!("{}", serde_json::to_string_pretty(&child)?);
+        }
+        TokenCmd::Verify { token, require } => {
+            let token_val: serde_json::Value = serde_json::from_str(&token)
+                .map_err(|e| anyhow::anyhow!("token is not valid JSON: {e}"))?;
+            let req = VerifyTokenRequest {
+                token: token_val,
+                require,
+            };
+            let url = format!("{}/v1/tokens/verify", base_url());
+            let res = http().post(&url).json(&req).send()?;
+            let body: VerifyTokenResponse = res.error_for_status()?.json()?;
+            if body.valid {
+                println!("valid");
+                if let Some(rights) = body.rights {
+                    println!("rights: {}", rights.join(", "));
+                }
+            } else {
+                anyhow::bail!("invalid: {}", body.error.unwrap_or_default());
+            }
+        }
+        TokenCmd::Show { token } => {
+            let token_val: serde_json::Value = serde_json::from_str(&token)
+                .map_err(|e| anyhow::anyhow!("token is not valid JSON: {e}"))?;
+            println!("{}", serde_json::to_string_pretty(&token_val)?);
+        }
     }
     Ok(())
 }

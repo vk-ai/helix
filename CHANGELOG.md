@@ -8,6 +8,10 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- CLI `helix token issue|attenuate|verify|show` talks to helixd for shrink-only
+  capability tokens. Rights can only be reduced on attenuate; daemon MAC key is
+  ephemeral. (helix-cap crate and /v1/tokens endpoints already existed.)
+
 - Committed `Cargo.lock` for reproducible workspace builds (repo hygiene).
 
 - Workshop-only Apprentice (`helix-apprentice`): `helix apprentice propose|execute|select|status`
