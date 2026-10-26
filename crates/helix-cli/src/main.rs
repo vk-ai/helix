@@ -3,9 +3,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use helix_atlas::{Atlas, Trust, UNTRUSTED_FUEL_CAP};
 use helix_charter::Charter;
-use helix_hands::{run_module, HandsConfig};
 use helix_mail::Mailbox;
 use helix_memory::{HelixHome, PREFS_CONTEXT_CHAR_CAP};
 use helix_protocol::{
