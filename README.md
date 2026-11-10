@@ -28,6 +28,15 @@ helix token verify '<json>' --require plot.read
 helix token show '<json>'
 ```
 
+Hands (Wasmtime host; plot-scoped FS only, deny-by-default WASI):
+
+```bash
+helix init
+helix hands run path/to/module.wasm --plot default
+# optional: --fuel 1000000
+# guest sees only /plot; no network, no ambient env, no $HOME
+```
+
 Workshop Apprentice (workshop pack only; sandbox tools; no Reliquary):
 
 ```bash

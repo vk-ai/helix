@@ -8,6 +8,10 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Added
 
+- CLI `helix hands run` wires the Wasmtime Hands host (plot-scoped FS only,
+  deny-by-default WASI, optional fuel). Guest sees only `/plot`. (helix-hands
+  crate already existed.)
+
 - CLI `helix token issue|attenuate|verify|show` talks to helixd for shrink-only
   capability tokens. Rights can only be reduced on attenuate; daemon MAC key is
   ephemeral. (helix-cap crate and /v1/tokens endpoints already existed.)

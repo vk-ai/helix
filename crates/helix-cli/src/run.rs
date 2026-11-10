@@ -61,10 +61,7 @@ pub fn go() -> anyhow::Result<()> {
         Commands::Secrets { cmd } => cmd_secrets(cmd)?,
         Commands::Grant { cmd } => cmd_grant(cmd)?,
         Commands::Token { cmd } => cmd_token(cmd)?,
-        Commands::Hands { cmd } => {
-            let _ = cmd;
-            anyhow::bail!("hands: restore full CLI handlers (tracked)");
-        }
+        Commands::Hands { cmd } => cmd_hands(cmd)?,
         Commands::Atlas { cmd } => {
             let _ = cmd;
             anyhow::bail!("atlas: restore full CLI handlers (tracked)");
@@ -313,6 +310,43 @@ fn cmd_token(cmd: TokenCmd) -> anyhow::Result<()> {
             let token_val: serde_json::Value = serde_json::from_str(&token)
                 .map_err(|e| anyhow::anyhow!("token is not valid JSON: {e}"))?;
             println!("{}", serde_json::to_string_pretty(&token_val)?);
+        }
+    }
+    Ok(())
+}
+
+fn cmd_hands(cmd: HandsCmd) -> anyhow::Result<()> {
+    match cmd {
+        HandsCmd::Run {
+            module,
+            plot,
+            fuel,
+            args,
+        } => {
+            let home = HelixHome::resolve()?;
+            let plot_dir = home.plot_dir(&plot)?;
+            let wasm = std::fs::read(&module).map_err(|e| {
+                anyhow::anyhow!("failed to read module {}: {e}", module.display())
+            })?;
+            let mut cfg = helix_hands::HandsConfig::for_plot(&plot_dir).with_inherit_stdio(true);
+            if let Some(f) = fuel {
+                cfg = cfg.with_fuel(f);
+            }
+            let guest_args = if args.is_empty() {
+                vec![module
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("hands")
+                    .to_string()]
+            } else {
+                args
+            };
+            cfg = cfg.with_args(guest_args);
+            let result = helix_hands::run_module(&wasm, &cfg)?;
+            println!("exit {}", result.exit_code);
+            if result.exit_code != 0 {
+                anyhow::bail!("module exited with {}", result.exit_code);
+            }
         }
     }
     Ok(())
