@@ -34,6 +34,8 @@ Helix versions follow [SemVer](https://semver.org/).
 
 ### Fixed
 
+- CI: `cargo fmt --check` on `helix-cli` Hands run path (map_err chain wrapping)
+
 - CI: `cargo fmt --check` in `helix-browser` (challenge status line and pane assertion wrapping)
 
 - CI: `cargo fmt --check` across workspace crates after the desk slice

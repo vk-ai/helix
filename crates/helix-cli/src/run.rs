@@ -325,9 +325,8 @@ fn cmd_hands(cmd: HandsCmd) -> anyhow::Result<()> {
         } => {
             let home = HelixHome::resolve()?;
             let plot_dir = home.plot_dir(&plot)?;
-            let wasm = std::fs::read(&module).map_err(|e| {
-                anyhow::anyhow!("failed to read module {}: {e}", module.display())
-            })?;
+            let wasm = std::fs::read(&module)
+                .map_err(|e| anyhow::anyhow!("failed to read module {}: {e}", module.display()))?;
             let mut cfg = helix_hands::HandsConfig::for_plot(&plot_dir).with_inherit_stdio(true);
             if let Some(f) = fuel {
                 cfg = cfg.with_fuel(f);
